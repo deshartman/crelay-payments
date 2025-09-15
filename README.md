@@ -196,6 +196,41 @@ Tool manifests are stored as **JSON objects** in Sync Maps defining available to
 5. `switch-language` - Changes TTS and/or transcription languages
 6. `play-media` - Plays audio media from URLs
 
+### Language Switching Example
+
+The system supports dynamic language switching during active calls using the `switch-language` tool. Users can request language changes naturally, and the system will immediately switch both text-to-speech and speech-to-text languages.
+
+**Example Conversation Flow:**
+```
+User: "Can you switch to Australian English?"
+
+System Processing:
+[SwitchLanguage] Switch language function called with arguments: {
+  "ttsLanguage": "en-AU",
+  "transcriptionLanguage": "en-AU"
+}
+
+[Conversation Relay] Sending immediate message: {
+  "type": "language",
+  "ttsLanguage": "en-AU",
+  "transcriptionLanguage": "en-AU"
+}
+
+AI Response: "No worries, I've switched to Australian English now.
+Is there something specific you'd like to know about how the system works,
+or do you want a general walk-through?"
+```
+
+**Supported Language Configurations:**
+- **en-AU**: Australian English with ElevenLabs voice `IKne3meq5aSn9XLyUdCD`
+- **en-US**: US English with ElevenLabs voice `tnSpp4vdxKPjI9w0GnoV`
+
+**Technical Implementation:**
+- Language switching uses Twilio's `SwitchLanguageMessage` WebSocket message type
+- Changes are applied immediately without call interruption
+- Both TTS (text-to-speech) and transcription languages are updated simultaneously
+- System maintains conversation context across language switches
+
 ### Dynamic Context Loading
 
 **Per-Call Configuration:**

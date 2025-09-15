@@ -1,5 +1,28 @@
 # Changelog
 
+## Release v4.4.1
+
+### Language Configuration Optimization
+
+#### Enhanced Language Configuration Structure
+- **Removed Redundant ConversationRelay Language Fields**: Eliminated duplicate language settings from ConversationRelay object as Languages array overrides these values
+- **Streamlined Configuration**: Removed `language`, `ttsLanguage`, `transcriptionProvider`, `transcriptionLanguage`, `speechModel`, `ttsProvider`, `voice` from ConversationRelay level
+- **Complete Language Element Support**: Updated Languages array to use only supported Twilio Language element parameters
+- **Proper Parameter Structure**: Languages now include only `code`, `ttsProvider`, `voice`, `transcriptionProvider`, `speechModel` as per Twilio documentation
+
+#### Configuration Cleanup Benefits
+- **Follows Twilio Best Practices**: Language elements properly override ConversationRelay defaults without redundancy
+- **Cleaner Configuration Structure**: No duplicate or conflicting language settings between levels
+- **Better Maintainability**: Single source of truth for language-specific settings in Languages array
+- **Documentation Compliance**: Configuration structure now matches official Twilio ConversationRelay documentation
+
+#### Language Switching Enhancement
+- **Dynamic Language Support**: Proper language switching with `switch-language` tool now works seamlessly
+- **Multi-Language Configuration**: Support for multiple language variants (en-AU, en-US) with distinct TTS voices
+- **Real-Time Language Changes**: Users can request language changes during calls with immediate effect
+
+This release optimizes the language configuration structure to eliminate redundancy and ensure full compliance with Twilio's ConversationRelay Language element specifications, providing cleaner configuration management and better language switching capabilities.
+
 ## Release v4.4.0
 
 ### Direct Parameter Configuration Migration
