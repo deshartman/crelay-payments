@@ -2,6 +2,8 @@ import twilio from 'twilio';
 import { EventEmitter } from 'events';
 import { logOut, logError } from '../utils/logger.js';
 import VoiceResponse from 'twilio/lib/twiml/VoiceResponse.js';
+import { TwilioSyncService } from './TwilioSyncService.js';
+import { ConversationRelayConfig } from '../interfaces/ConversationRelay.js';
 
 /**
  * Interface for status callback object
@@ -25,6 +27,7 @@ class TwilioService extends EventEmitter {
     private authToken: string;
     private fromNumber: string;
     private twilioClient: twilio.Twilio;
+    private syncService: TwilioSyncService;
 
     constructor() {
         super();
@@ -32,7 +35,31 @@ class TwilioService extends EventEmitter {
         this.authToken = process.env.AUTH_TOKEN || '';
         this.fromNumber = process.env.FROM_NUMBER || '';
         this.twilioClient = twilio(process.env.ACCOUNT_SID || '', process.env.AUTH_TOKEN || '');
+        this.syncService = new TwilioSyncService(this.twilioClient);
         // this.twilioClient = twilio(process.env.API_KEY, process.env.API_SECRET, { process.env.ACCOUNT_SID });    // Some issue here with the API key and secret
+    }
+
+    /**
+     * Initialize the Sync Service with all required services and maps
+     */
+    async initialize(): Promise<void> {
+        await this.syncService.initialize();
+    }
+
+    /**
+     * Helper function to filter out unset values from configuration
+     */
+    private filterUnsetValues(config: any): any {
+        const filtered: any = {};
+
+        Object.entries(config).forEach(([key, value]) => {
+            if (value !== null && value !== undefined && value !== '' &&
+                !(Array.isArray(value) && value.length === 0)) {
+                filtered[key] = value;
+            }
+        });
+
+        return filtered;
     }
 
     /**
@@ -47,7 +74,7 @@ class TwilioService extends EventEmitter {
      */
     async makeOutboundCall(serverBaseUrl: string, toNumber: string, callReference: string = ""): Promise<any> {
         try {
-            const conversationRelay = this.connectConversationRelay(serverBaseUrl, callReference);
+            const conversationRelay = await this.connectConversationRelay(serverBaseUrl, callReference);
 
             if (!conversationRelay) {
                 throw new Error('Failed to generate TwiML for conversation relay');
@@ -94,48 +121,54 @@ class TwilioService extends EventEmitter {
 
     /**
      * Generates TwiML to connect a call to the Conversation Relay service.
-     * Configures the connection with Deepgram transcription, text-to-speech settings,
-     * and DTMF detection. Can be used for both inbound and outbound calls.
+     * Uses dynamic configuration from Sync Maps instead of hardcoded values.
+     * Can be used for both inbound and outbound calls.
      * 
-     * @param {string} callReference - Unique reference ID for the customer
      * @param {string} serverBaseUrl - Base URL for the Conversation Relay WebSocket server (without wss:// prefix)
-     * @returns {twilio.twiml.VoiceResponse|null} The TwiML response object if successful, null if generation fails
+     * @param {string} callReference - Unique reference ID for the customer
+     * @returns {Promise<twilio.twiml.VoiceResponse|null>} The TwiML response object if successful, null if generation fails
      */
-    connectConversationRelay(serverBaseUrl: string, callReference: string = ""): twilio.twiml.VoiceResponse | null {
+    async connectConversationRelay(serverBaseUrl: string, callReference: string = ""): Promise<twilio.twiml.VoiceResponse | null> {
         try {
             logOut('TwilioService', `Generating TwiML for call with callReference: ${callReference}`);
 
-            // Generate the Twiml we will need once the call is connected. Note, this could be done in two steps via the server, were we set a url: instead of twiml:, but this just seemed overly complicated.
+            // Get configuration from Sync using UsedConfig
+            const usedConfig = await this.getUsedConfig();
+            const config = await this.getConversationRelayConfig(usedConfig.configuration);
+            const languages = await this.getLanguages();
+
+            if (!config) {
+                logError('TwilioService', 'No ConversationRelay configuration found in Sync');
+                return null;
+            }
+
+            // Generate the TwiML with dynamic configuration
             const response: VoiceResponse = new twilio.twiml.VoiceResponse();
             const connect: VoiceResponse.Connect = response.connect();
+            const filteredConfig = this.filterUnsetValues(config);
             const conversationRelay: VoiceResponse.ConversationRelay = connect.conversationRelay({
                 url: `wss://${serverBaseUrl}/conversation-relay`,
-                welcomeGreeting: "Hi! How can I help you today?",
-                transcriptionProvider: "Deepgram",
-                speechModel: "nova-3-general",
-                hints: "",  // List of hint words for the STT engine
-                interruptible: "any",
-                ttsProvider: "Elevenlabs",
-                voice: "ZF6FPAbjXT4488VcRRnw",
-                dtmfDetection: true, // DTMF & Speech interruptible
+                ...filteredConfig
             } as any);
 
-            conversationRelay.language({
-                code: 'en-GB',
-                ttsProvider: 'ElevenLabs',
-                voice: 'ZF6FPAbjXT4488VcRRnw',
-            });
-            conversationRelay.language({
-                code: 'en-US',
-                ttsProvider: 'ElevenLabs',
-                voice: '1y13AZVBVdi3UwMhDhaI'
-            });
-
-            conversationRelay.parameter(
-                {
-                    name: 'callReference',
-                    value: callReference
+            // Add language configurations if available
+            if (languages) {
+                Object.keys(languages).forEach(langCode => {
+                    const langConfig = languages[langCode];
+                    if (langConfig && langConfig.ttsProvider && langConfig.voice) {
+                        conversationRelay.language({
+                            code: langCode,
+                            ttsProvider: langConfig.ttsProvider,
+                            voice: langConfig.voice,
+                        });
+                    }
                 });
+            }
+
+            conversationRelay.parameter({
+                name: 'callReference',
+                value: callReference
+            });
 
             // logOut('TwilioService', `Generated TwiML using Helper for call: ${response.toString()}`);
 
@@ -145,6 +178,152 @@ class TwilioService extends EventEmitter {
             logError('TwilioService', `Error generating call TwiML: ${error instanceof Error ? error.message : String(error)}`);
             return null;
         }
+    }
+
+    // ========== Configuration Management API ==========
+
+    /**
+     * Get ConversationRelay configuration
+     * @param key Optional specific configuration key
+     * @returns Configuration value(s)
+     */
+    async getConversationRelayConfig(key?: string): Promise<any> {
+        return await this.syncService.getMapItem('ConversationRelay', 'Configuration', key);
+    }
+
+    /**
+     * Set ConversationRelay configuration
+     * @param key Configuration key
+     * @param value Configuration value
+     */
+    async setConversationRelayConfig(key: string, value: any): Promise<void> {
+        await this.syncService.setMapItem('ConversationRelay', 'Configuration', key, value);
+    }
+
+    /**
+     * Delete ConversationRelay configuration
+     * @param key Configuration key to delete
+     */
+    async deleteConversationRelayConfig(key: string): Promise<void> {
+        await this.syncService.deleteMapItem('ConversationRelay', 'Configuration', key);
+    }
+
+    // ========== Language Management API ==========
+
+    /**
+     * Get language configurations
+     * @param key Optional specific language key
+     * @returns Language configuration(s)
+     */
+    async getLanguages(key?: string): Promise<any> {
+        return await this.syncService.getMapItem('ConversationRelay', 'Languages', key);
+    }
+
+    /**
+     * Set language configuration
+     * @param key Language key
+     * @param value Language configuration
+     */
+    async setLanguage(key: string, value: any): Promise<void> {
+        await this.syncService.setMapItem('ConversationRelay', 'Languages', key, value);
+    }
+
+    /**
+     * Delete language configuration
+     * @param key Language key to delete
+     */
+    async deleteLanguage(key: string): Promise<void> {
+        await this.syncService.deleteMapItem('ConversationRelay', 'Languages', key);
+    }
+
+    // ========== UsedConfig Management API ==========
+
+    /**
+     * Get used configuration
+     * @param key Optional specific used config key
+     * @returns Used configuration value(s)
+     */
+    async getUsedConfig(key?: string): Promise<any> {
+        const usedConfig = await this.syncService.getDocument('ConversationRelay', 'UsedConfig');
+        if (key) {
+            return usedConfig ? usedConfig[key] : null;
+        }
+        return usedConfig;
+    }
+
+    /**
+     * Set used configuration
+     * @param key Used config key
+     * @param value Used configuration value
+     */
+    async setUsedConfig(key: string, value: any): Promise<void> {
+        const usedConfig = await this.syncService.getDocument('ConversationRelay', 'UsedConfig') || {};
+        usedConfig[key] = value;
+        await this.syncService.setDocument('ConversationRelay', 'UsedConfig', usedConfig);
+    }
+
+    /**
+     * Set the entire used configuration
+     * @param config Complete used configuration object
+     */
+    async setUsedConfigComplete(config: any): Promise<void> {
+        await this.syncService.setDocument('ConversationRelay', 'UsedConfig', config);
+    }
+
+    // ========== Context Management API ==========
+
+    /**
+     * Get context content
+     * @param key Optional specific context key
+     * @returns Context content(s)
+     */
+    async getContext(key?: string): Promise<any> {
+        return await this.syncService.getMapItem('ConversationRelay', 'Context', key);
+    }
+
+    /**
+     * Set context content
+     * @param key Context key
+     * @param value Context content
+     */
+    async setContext(key: string, value: string): Promise<void> {
+        await this.syncService.setMapItem('ConversationRelay', 'Context', key, value);
+    }
+
+    /**
+     * Delete context content
+     * @param key Context key to delete
+     */
+    async deleteContext(key: string): Promise<void> {
+        await this.syncService.deleteMapItem('ConversationRelay', 'Context', key);
+    }
+
+    // ========== Tool Manifest Management API ==========
+
+    /**
+     * Get tool manifest content
+     * @param key Optional specific manifest key
+     * @returns Tool manifest content(s)
+     */
+    async getToolManifest(key?: string): Promise<any> {
+        return await this.syncService.getMapItem('ConversationRelay', 'ToolManifest', key);
+    }
+
+    /**
+     * Set tool manifest content
+     * @param key Manifest key
+     * @param value Manifest content
+     */
+    async setToolManifest(key: string, value: any): Promise<void> {
+        await this.syncService.setMapItem('ConversationRelay', 'ToolManifest', key, value);
+    }
+
+    /**
+     * Delete tool manifest content
+     * @param key Manifest key to delete
+     */
+    async deleteToolManifest(key: string): Promise<void> {
+        await this.syncService.deleteMapItem('ConversationRelay', 'ToolManifest', key);
     }
 
     /**

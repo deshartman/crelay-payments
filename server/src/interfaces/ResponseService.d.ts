@@ -90,20 +90,20 @@ export interface ResponseService {
         interrupt(): void;
 
         /**
-         * Updates the context file for the response service
+         * Updates the context for the response service
          * 
-         * @param contextFile - New context file path
+         * @param context - New context content string
          * @returns Promise that resolves when update is complete
          */
-        updateContext(contextFile: string): Promise<void>;
+        updateContext(context: string): Promise<void>;
 
         /**
-         * Updates the tool manifest file for the response service
+         * Updates the tool manifest for the response service
          * 
-         * @param toolManifestFile - New tool manifest file path
+         * @param toolManifest - New tool manifest object
          * @returns Promise that resolves when update is complete
          */
-        updateTools(toolManifestFile: string): Promise<void>;
+        updateTools(toolManifest: object): Promise<void>;
 
         /**
          * Performs cleanup of service resources

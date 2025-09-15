@@ -1,4 +1,27 @@
 /**
+ * Interface for ConversationRelay TwiML configuration
+ */
+export interface ConversationRelayConfig {
+    welcomeGreeting?: string;
+    welcomeGreetingInterruptible?: string;
+    language?: string;
+    ttsLanguage?: string;
+    ttsProvider?: string;
+    voice?: string;
+    transcriptionLanguage?: string;
+    transcriptionProvider?: string;
+    speechModel?: string;
+    interruptible?: string;
+    dtmfDetection?: boolean;
+    reportInputDuringAgentSpeech?: string;
+    preemptible?: boolean;
+    hints?: string;
+    debug?: string;
+    elevenlabsTextNormalization?: string;
+    intelligenceService?: string;
+}
+
+/**
  * Unified conversation relay handler interface for dependency injection
  */
 export interface ConversationRelayHandler {

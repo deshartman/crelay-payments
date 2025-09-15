@@ -119,16 +119,16 @@ class OpenAIResponseService implements ResponseService {
     /**
      * Creates a new ResponseService instance with proper async initialization.
      * Initializes client, loads tools from manifest, and sets up initial state.
-     * 
-     * @param {string} contextFile - Path to the context.md file
-     * @param {string} toolManifestFile - Path to the toolManifest.json file
+     *
+     * @param {string} context - Context content for the conversation
+     * @param {object} manifest - Tool manifest object for the conversation
      * @returns {Promise<OpenAIResponseService>} Fully initialized service instance
      * @throws {Error} If tool loading fails
      */
-    static async create(contextFile: string, toolManifestFile: string): Promise<OpenAIResponseService> {
+    static async create(context: string, manifest: object): Promise<OpenAIResponseService> {
         const service = new OpenAIResponseService();
-        await service.updateContext(contextFile);
-        await service.updateTools(toolManifestFile);
+        await service.updateContext(context);
+        await service.updateTools(manifest);
         return service;
     }
 
@@ -255,50 +255,50 @@ class OpenAIResponseService implements ResponseService {
     }
 
     /**
-     * Updates the context file used by the service dynamically.
-     * The convention is that the context file will be stored in the assets directory.
+     * Updates the context (instructions) for the conversation from content string.
+     * This changes the system instructions that guide the LLM's responses.
      * 
-     * @param {string} contextFile - Path to the new context.md file
-     * @throws {Error} If file loading fails
+     * @param {string} context - Context content string
+     * @throws {Error} If context is invalid
      */
-    async updateContext(contextFile: string): Promise<void> {
-        const __filename = fileURLToPath(import.meta.url);
-        const __dirname = dirname(__filename);
-
+    async updateContext(context: string): Promise<void> {
         try {
-            // Load new context from provided file path
-            const assetsDir = path.join(__dirname, '..', '..', 'assets');
-            const context = fs.readFileSync(path.join(assetsDir, contextFile), 'utf8');
+            if (!context || typeof context !== 'string') {
+                throw new Error('Context must be a non-empty string');
+            }
 
             // Update instructions and reset conversation
             this.instructions = context;
             this.currentResponseId = null; // Reset conversation to use new context
             this.inputMessages = []; // Reset input messages
 
-            logOut('OpenAIResponseService', `Updated context file: ${contextFile}`);
+            logOut('OpenAIResponseService', `Updated context content (${context.length} characters)`);
 
         } catch (error) {
-            logError('OpenAIResponseService', `Error updating context. Please ensure the file is in the /assets directory: ${error instanceof Error ? error.message : String(error)}`);
+            logError('OpenAIResponseService', `Error updating context: ${error instanceof Error ? error.message : String(error)}`);
             throw error;
         }
     }
 
+
     /**
-     * Updates the tool manifest file used by the service dynamically.
-     * The convention is that the manifest file will be stored in the assets directory.
+     * Updates the tool manifest used by the service dynamically from content object.
      * 
-     * @param {string} toolManifestFile - Path to the new toolManifest.json file
-     * @throws {Error} If file loading fails
+     * @param {any} toolManifest - Tool manifest object
+     * @throws {Error} If tool manifest is invalid or tool loading fails
      */
-    async updateTools(toolManifestFile: string): Promise<void> {
+    async updateTools(toolManifest: any): Promise<void> {
         const __filename = fileURLToPath(import.meta.url);
         const __dirname = dirname(__filename);
 
         try {
-            // Load new tool manifest from provided file path
-            const assetsDir = path.join(__dirname, '..', '..', 'assets');
-            const toolManifestPath = path.join(assetsDir, toolManifestFile);
-            const toolManifest = JSON.parse(fs.readFileSync(toolManifestPath, 'utf8')) as { tools: any[] };
+            if (!toolManifest || typeof toolManifest !== 'object') {
+                throw new Error('Tool manifest must be a valid object');
+            }
+
+            if (!toolManifest.tools || !Array.isArray(toolManifest.tools)) {
+                throw new Error('Tool manifest must have a tools array');
+            }
 
             // Update tool definitions and reload tools
             this.toolManifest = toolManifest;
@@ -323,10 +323,11 @@ class OpenAIResponseService implements ResponseService {
             logOut('OpenAIResponseService', `Loaded ${Object.keys(this.loadedTools).length} tools`);
 
         } catch (error) {
-            logError('OpenAIResponseService', `Error updating tools. Please ensure the file is in the /assets directory: ${error instanceof Error ? error.message : String(error)}`);
+            logError('OpenAIResponseService', `Error updating tools: ${error instanceof Error ? error.message : String(error)}`);
             throw error;
         }
     }
+
 
     /**
      * Performs cleanup of service resources.

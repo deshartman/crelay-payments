@@ -1,5 +1,69 @@
 # Changelog
 
+## Release v4.4.0
+
+### Direct Parameter Configuration Migration
+
+#### Complete Migration from File-Based to Direct Parameter Configuration
+- **Architectural Simplification**: Migrated from file-based configuration (`server/assets/`) to direct parameter passing for context and tool manifests
+- **Streamlined Service Creation**: Services now receive context and manifest content directly as parameters instead of loading from files
+- **Improved Performance**: Eliminated file I/O overhead by passing configuration data directly to services
+- **Enhanced Flexibility**: Context and manifest data can now come from any source (files, databases, APIs, etc.)
+
+#### Service Architecture Improvements
+- **Direct Parameter Passing**: All services now accept context and manifest content as direct parameters
+  - `OpenAIResponseService.create(context: string, manifest: object)` - Context and manifest passed directly
+  - `ConversationRelayService.create(sessionData, context, manifest)` - Factory method with direct parameters
+  - `FlowiseResponseService.create(context: string, manifest: object)` - Updated to match interface
+- **Content-Based Interface**: ResponseService interface updated to work with content instead of file paths
+  - `updateContext(context: string): Promise<void>` - Updates context from string content
+  - `updateTools(manifest: object): Promise<void>` - Updates tools from manifest object
+- **Eliminated File Dependencies**: Services no longer depend on file system operations for configuration
+- **Type Safety Enhancement**: Context as `string`, toolManifest as `object` across all services
+
+#### Code Cleanup and Optimization
+- **Removed Unused Infrastructure**: Eliminated unused AssetsLoader infrastructure
+  - Removed `AssetsLoader.ts` - Factory pattern loader no longer needed
+  - Removed `SyncAssetsLoader.ts` - Sync implementation no longer needed
+  - Removed `AssetsLoader.d.ts` - Interface no longer needed
+  - Removed entire `/server/src/loaders/` directory - No longer needed
+- **Simplified Service Creation**: Direct parameter passing eliminates complex loading mechanisms
+- **Cleaner Dependencies**: Services have cleaner, more predictable dependencies
+
+#### Service Integration Updates
+- **WebSocket Handler**: Services created with context and manifest passed directly from calling code
+- **Factory Pattern Enhancement**: Service creation methods now accept content parameters directly
+- **Error Handling**: Simplified error handling without file system dependencies
+- **Memory Efficiency**: Reduced memory overhead by eliminating unused loader infrastructure
+
+### Migration Benefits
+
+#### Performance Improvements
+- **Faster Service Creation**: No file I/O operations during service initialization
+- **Reduced Memory Footprint**: Eliminated unused loader classes and infrastructure
+- **Lower Latency**: Direct parameter passing without intermediate loading steps
+- **Simplified Call Stack**: Cleaner execution path without loader abstraction layers
+
+#### Developer Experience
+- **Simpler API**: Direct parameter passing is more intuitive than file-based configuration
+- **Better Testability**: Easy to test with mock context and manifest data
+- **Flexible Data Sources**: Context and manifest can come from any source, not just files
+- **Cleaner Architecture**: Eliminated unnecessary abstraction layers and complexity
+
+#### Maintainability
+- **Reduced Codebase**: Removed unused loader infrastructure reduces maintenance burden
+- **Clearer Dependencies**: Services have explicit, direct dependencies on their configuration data
+- **Better Separation of Concerns**: Configuration sourcing is separated from service logic
+- **Future-Proof**: Architecture supports any configuration source without service changes
+
+#### Type Safety & Reliability
+- **Compile-Time Validation**: TypeScript enforces correct parameter types for all services
+- **Predictable Behavior**: Direct parameter passing eliminates file system error scenarios
+- **Consistent Interface**: All services follow the same parameter-based creation pattern
+- **Enhanced Debugging**: Simpler execution path makes debugging more straightforward
+
+This release represents a fundamental simplification of the service architecture, moving from complex file-based configuration loading to straightforward direct parameter passing, providing better performance, maintainability, and flexibility while maintaining full functional compatibility.
+
 ## Release v4.3.1
 
 ### Complete CCRelay Method Support

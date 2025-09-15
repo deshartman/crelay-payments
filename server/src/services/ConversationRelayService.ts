@@ -205,22 +205,22 @@ class ConversationRelayService implements ConversationRelay {
     /**
      * Factory method to create a ConversationRelayService instance.
      * Handles async OpenAI service creation internally.
-     * 
+     *
      * @param {SessionData} sessionData - Session data for the conversation
-     * @param {string} contextFile - Context file path or environment variable fallback
-     * @param {string} toolManifestFile - Tool manifest file path or environment variable fallback
+     * @param {string} context - Context content for the conversation
+     * @param {object} manifest - Tool manifest object for the conversation
      * @param {string} [callSid] - Optional call SID for event handling
      * @returns {Promise<ConversationRelayService>} Initialized service instance
      */
     static async create(
         sessionData: SessionData,
-        contextFile: string,
-        toolManifestFile: string,
+        context: string,
+        manifest: object,
         callSid?: string
     ): Promise<ConversationRelayService> {
         logOut('Conversation Relay', 'Creating OpenAI Response Service');
         try {
-            const responseService = await OpenAIResponseService.create(contextFile, toolManifestFile);
+            const responseService = await OpenAIResponseService.create(context, manifest);
             const instance = new ConversationRelayService(responseService, sessionData);
 
             // Create and set up the response handler
@@ -360,23 +360,23 @@ class ConversationRelayService implements ConversationRelay {
     }
 
     /**
-     * Updates the context file for the response service.
+     * Updates the context for the response service.
      * Proxy method for direct access to response service functionality.
      * 
-     * @param {string} contextFile - New context file path
+     * @param {string} context - New context content string
      */
-    async updateContext(contextFile: string): Promise<void> {
-        await this.responseService.updateContext(contextFile);
+    async updateContext(context: string): Promise<void> {
+        await this.responseService.updateContext(context);
     }
 
     /**
-     * Updates the tool manifest file for the response service.
+     * Updates the tool manifest for the response service.
      * Proxy method for direct access to response service functionality.
      * 
-     * @param {string} toolManifestFile - New tool manifest file path
+     * @param {any} toolManifest - New tool manifest object
      */
-    async updateTools(toolManifestFile: string): Promise<void> {
-        await this.responseService.updateTools(toolManifestFile);
+    async updateTools(toolManifest: any): Promise<void> {
+        await this.responseService.updateTools(toolManifest);
     }
 
     /**

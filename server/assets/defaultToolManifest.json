@@ -53,6 +53,50 @@
                 ]
             },
             "strict": false
+        },
+        {
+            "type": "function",
+            "name": "send-sms",
+            "description": "This sends an SMS message to the number provided",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "to": {
+                        "type": "string",
+                        "description": "The number to send the SMS to. This HAS to be in +1234567890 format"
+                    },
+                    "message": {
+                        "type": "string",
+                        "description": "The message to be sent"
+                    }
+                },
+                "required": [
+                    "to",
+                    "message"
+                ]
+            },
+            "strict": false
+        },
+        {
+            "type": "function",
+            "name": "switch-language",
+            "description": "Switches the TTS and/or transcription language for the conversation. At least one of ttsLanguage or transcriptionLanguage must be provided.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "ttsLanguage": {
+                        "type": "string",
+                        "description": "Language code for text-to-speech conversion (e.g., 'en-GB', 'en-US')"
+                    },
+                    "transcriptionLanguage": {
+                        "type": "string",
+                        "description": "Language code for speech-to-text transcription (e.g., 'en-GB', 'en-US')"
+                    }
+                },
+                "required": [],
+                "additionalProperties": false
+            },
+            "strict": false
         }
     ]
 }

@@ -2,9 +2,13 @@
 
 This is a reference implementation aimed at introducing the key concepts of Conversation Relay. The key here is to ensure it is a workable environment that can be used to understand the basic concepts of Conversation Relay. It is intentionally simple and only the minimum has been done to ensure the understanding is focussed on the core concepts.
 
-## Release v4.3.1
+## Release v4.4.0
 
-This release adds complete CRelay method support by implementing the remaining Twilio WebSocket message types. The system now supports all official Twilio Conversation Relay WebSocket messages including `switch-language` for dynamic language switching and `play-media` for audio playback from URLs. These additions provide full coverage of Twilio's Conversation Relay capabilities with proper type safety and consistent tool patterns. See the [CHANGELOG.md](./CHANGELOG.md) for detailed release history.
+This release introduces **Direct Parameter Configuration Migration**, simplifying the architecture by migrating from file-based configuration to direct parameter passing for context and tool manifests. Services now receive configuration data directly as parameters, eliminating file I/O overhead and improving performance while providing greater flexibility for configuration sources.
+
+**✅ No Migration Required**: The system now uses direct parameter passing, eliminating the need for external configuration management systems.
+
+See the [CHANGELOG.md](./CHANGELOG.md) for detailed release history.
 
 ## Prerequisites
 
@@ -125,27 +129,32 @@ ngrok http --domain server-yourdomain.ngrok.dev 3001
      ```
    - Method: HTTP POST
 
-Configure your Conversation Relay parameters in server/src/services/TwilioService.ts:
+### TwiML Configuration
+
+The server **dynamically generates TwiML** using configuration stored in Twilio Sync Maps. Instead of hardcoded values, all conversation relay parameters are loaded from your Sync configuration:
 
 ```typescript
-// Generate the Twiml we will need once the call is connected
-const response = new twilio.twiml.VoiceResponse();
-const connect = response.connect();
-const conversationRelay = connect.conversationRelay({
-      url: `wss://${serverBaseUrl}/conversation-relay`,
-      transcriptionProvider: "deepgram",
-      speechModel: "nova-3-general",
-      interruptible: "any",
-      ttsProvider: "Elevenlabs",
-      voice: "Charlie-flash_v2_5",
-      dtmfDetection: true,
-} as any);
+// TwiML is generated dynamically from Sync Maps configuration
+const config = await this.getConversationRelayConfig(); // Loads from Sync Maps
+const languages = await this.getLanguages(); // Loads language settings
 
-conversationRelay.parameter({
-      name: 'callReference',
-      value: callReference
+const conversationRelay = connect.conversationRelay({
+    url: `wss://${serverBaseUrl}/conversation-relay`,
+    transcriptionProvider: config.transcriptionProvider,  // From Sync Maps
+    speechModel: config.speechModel,                      // From Sync Maps
+    interruptible: config.interruptible,                  // From Sync Maps
+    ttsProvider: config.ttsProvider,                      // From Sync Maps
+    voice: config.voice,                                  // From Sync Maps
+    dtmfDetection: config.dtmfDetection,                  // From Sync Maps
+    welcomeGreeting: config.welcomeGreeting               // From Sync Maps
 });
 ```
+
+**Configuration Management:**
+- All TwiML parameters are stored in Sync Maps under the `ConversationRelay` service
+- Configuration can be updated via API without server restarts
+- Changes take effect immediately for new calls
+- Language-specific settings support multi-language operations
 
 ### WebSocket Connection Flow
 
@@ -154,29 +163,32 @@ conversationRelay.parameter({
 3. The server creates service instances and begins processing incoming messages
 4. Each WebSocket connection maintains its own isolated session in a wsSessionsMap
 
-## GPT Context Configuration
+## OpenAI Context Configuration
 
-The server uses two key files to configure the GPT conversation context:
+The server uses **Twilio Sync Maps** to store and manage OpenAI conversation contexts and tool manifests:
 
-### context.md
+### Context Documents
 
-Located in `server/assets/context.md`, this file defines:
-- The AI assistant's persona
-- Conversation style guidelines
-- Response formatting rules
-- Authentication process steps
-- Customer validation requirements
+Context documents are stored as **string content** in Sync Maps with unique keys:
 
-Key sections to configure:
-1. Objective - Define the AI's role and primary tasks
-2. Style Guardrails - Set conversation tone and behavior rules
-3. Response Guidelines - Specify formatting and delivery rules
-4. Instructions - Detail specific process steps
+**Context Structure:**
+- **AI Assistant Persona** - Define the AI's role and personality
+- **Conversation Guidelines** - Set tone, style, and behavior rules
+- **Response Formatting** - Specify how responses should be structured
+- **Process Instructions** - Detail specific conversation flows and steps
+- **Domain Knowledge** - Include relevant business context and rules
 
-### toolManifest.json
+**Key Sections to Configure:**
+1. **Objective** - Define the AI's primary role and tasks
+2. **Style Guardrails** - Set conversation tone and behavior boundaries
+3. **Response Guidelines** - Specify formatting and delivery requirements
+4. **Instructions** - Detail specific process steps and workflows
 
-Located in `server/assets/toolManifest.json`, this file defines the tools available to the OpenAI service. Available tools:
+### Tool Manifests
 
+Tool manifests are stored as **JSON objects** in Sync Maps defining available tools:
+
+**Available Tools:**
 1. `end-call` - Gracefully terminates the current call
 2. `live-agent-handoff` - Transfers the call to a human agent
 3. `send-dtmf` - Sends DTMF tones during the call
@@ -184,35 +196,243 @@ Located in `server/assets/toolManifest.json`, this file defines the tools availa
 5. `switch-language` - Changes TTS and/or transcription languages
 6. `play-media` - Plays audio media from URLs
 
-### Dynamic Context System
+### Dynamic Context Loading
 
-The system supports dynamic context loading through environment variables:
+**Per-Call Configuration:**
+```typescript
+// WebSocket setup message with custom configuration
+{
+  "type": "setup",
+  "customParameters": {
+    "contextKey": "customerServiceContext",
+    "manifestKey": "limitedToolSet"
+  }
+}
+```
 
-- `defaultContext.md` and `defaultToolManifest.json` - Used when no specific context is configured
-- `MyContext.md` and `MyToolManifest.json` - Specialized context and tools for specific use cases
+**Runtime Configuration Updates:**
+```bash
+# Update active call configuration
+curl -X POST '/updateResponseService' \
+  --data '{
+    "callSid": "CA1234...",
+    "contextKey": "escalationContext",
+    "manifestKey": "managerTools"
+  }'
+```
 
-To use a specific context:
-1. Add the context and tool manifest files to the `server/assets` directory
-2. Configure the environment variables in your `.env` file:
-   ```bash
-   LLM_CONTEXT=YourContext.md
-   LLM_MANIFEST=YourToolManifest.json
-   ```
+### Quick Start Configuration Examples
+
+**Initial Setup (Automatic):**
+```bash
+# 1. Start the server (automatically creates defaults)
+npm run dev
+
+# 2. Make a test call (uses defaultContext and defaultToolManifest automatically)
+# No additional setup required!
+```
+
+**Adding a Custom Customer Service Configuration:**
+```bash
+# 1. Upload customer service context
+curl -X POST 'https://your-server/api/sync/context' \
+  --header 'Content-Type: application/json' \
+  --data-raw '{
+    "customerServiceContext": "You are a helpful customer service representative..."
+  }'
+
+# 2. Upload restricted tools for customer service
+curl -X POST 'https://your-server/api/sync/toolmanifest' \
+  --header 'Content-Type: application/json' \
+  --data-raw '{
+    "customerServiceTools": {
+      "tools": [
+        {"type": "function", "function": {"name": "send-sms", ...}},
+        {"type": "function", "function": {"name": "live-agent-handoff", ...}}
+      ]
+    }
+  }'
+
+# 3. Set as system default
+curl -X POST 'https://your-server/api/sync/usedconfig' \
+  --data-raw '{
+    "context": "customerServiceContext",
+    "manifest": "customerServiceTools"
+  }'
+```
+
+**Configuration Examples by Use Case:**
+
+**Context Keys:**
+- `defaultContext` - General purpose conversation (auto-created)
+- `customerServiceContext` - Customer support scenarios
+- `salesContext` - Sales and lead qualification
+- `technicalSupportContext` - Technical troubleshooting
+
+**Tool Manifest Keys:**
+- `defaultToolManifest` - Standard tool set (auto-created)
+- `limitedTools` - Restricted tools for basic scenarios
+- `managerTools` - Extended tools for escalated calls
+- `adminTools` - Full administrative tool access
 
 ## Environment Configuration
 
 Create a `.env` file in the server directory with the following variables:
 
 ```bash
+# Server Configuration
 PORT=3001                                    # Server port number
 SERVER_BASE_URL=your_server_url              # Base URL for your server (e.g., ngrok URL)
-OPENAI_API_KEY=your_openai_api_key          # OpenAI API key for GPT integration
-OPENAI_MODEL=gpt-4-1106-preview             # OpenAI model to use for conversations
 
-# Dynamic Context Configuration
-LLM_CONTEXT=MyContext.md                   # Specify which context file to use (defaults to defaultContext.md)
-LLM_MANIFEST=MyToolManifest.json      # Specify which tool manifest to use (defaults to defaultToolManifest.json)
+# OpenAI Configuration
+OPENAI_API_KEY=your_openai_api_key          # OpenAI API key for GPT integration
+OPENAI_MODEL=gpt-4o                         # OpenAI model to use for conversations
+
+# Twilio Configuration (required for Sync Maps and voice services)
+ACCOUNT_SID=your_twilio_account_sid         # Twilio Account SID for Sync and voice operations
+AUTH_TOKEN=your_twilio_auth_token           # Twilio Auth Token for authentication
+API_KEY=your_twilio_api_key                 # Twilio API Key for enhanced authentication
+API_SECRET=your_twilio_api_secret           # Twilio API Secret for enhanced authentication
+FROM_NUMBER=your_twilio_phone_number        # Twilio phone number for calls/SMS
 ```
+
+### Required Twilio Services
+
+The system requires the following Twilio services to be enabled in your account:
+- **Voice** - For handling phone calls and conversation relay
+- **Sync** - For storing and retrieving configuration data (context documents and tool manifests)
+- **SMS** (optional) - For send-sms tool functionality
+
+## Configuration Management
+
+Version 4.4.0 uses **Twilio Sync Maps** for cloud-based configuration storage with **key-based dynamic loading**. Context documents and tool manifests are stored in Sync Maps and retrieved by key for each conversation session.
+
+### Automatic Default Setup
+
+**🚀 Getting Started:** The system automatically creates default configurations to get you up and running quickly:
+
+1. **Automatic Sync Maps Creation**: On first startup, the server automatically creates required Sync Services and Maps
+2. **Default Configuration Loading**: The system loads `defaultContext` and `defaultToolManifest` from local files in `server/assets/`
+3. **Immediate Operation**: You can start making calls immediately using the default configuration
+4. **No Manual Setup Required**: The system handles all initial Sync Maps population automatically
+
+**Default Files Auto-Loaded:**
+- `server/assets/defaultContext.md` → Sync Maps key `defaultContext`
+- `server/assets/defaultToolManifest.json` → Sync Maps key `defaultToolManifest`
+
+### How Configuration Works
+
+The system uses a **hybrid architecture**:
+
+1. **Storage**: Context and tool manifests are stored in Twilio Sync Maps
+2. **Retrieval**: Configuration is loaded dynamically using keys (e.g., `defaultContext`, `defaultToolManifest`)
+3. **Service Creation**: Loaded configuration is passed directly to services as parameters
+4. **Dynamic Switching**: Different keys can be specified per call for custom configurations
+5. **Auto-Population**: Default configurations are automatically loaded from local files on startup
+
+### Configuration Keys
+
+**Default Keys:**
+- `defaultContext` - Default conversation context document
+- `defaultToolManifest` - Default tool definitions object
+
+**Custom Keys:**
+- Any custom key can be used to store and retrieve specialized configurations
+- Keys are specified via `contextKey` and `manifestKey` parameters in WebSocket setup
+
+### Dynamic Configuration Loading
+
+**WebSocket Setup with Custom Keys:**
+```json
+{
+  "type": "setup",
+  "customParameters": {
+    "contextKey": "customerServiceContext",
+    "manifestKey": "customerServiceTools"
+  }
+}
+```
+
+**API-Based Configuration Updates:**
+```bash
+# Update context for active call
+curl -X POST 'https://your-server/updateResponseService' \
+  --header 'Content-Type: application/json' \
+  --data-raw '{
+    "callSid": "CA1234...",
+    "contextKey": "newContext",
+    "manifestKey": "newManifest"
+  }'
+```
+
+### Sync Maps Structure
+
+**Context Documents** (stored as strings):
+- `defaultContext`: Default conversation context
+- `customerServiceContext`: Customer service specific context
+- `salesContext`: Sales conversation context
+
+**Tool Manifests** (stored as objects):
+- `defaultToolManifest`: Standard tool set
+- `customerServiceTools`: Customer service specific tools
+- `salesTools`: Sales specific tools
+
+### Managing Additional Configurations
+
+**🔧 Adding Custom Contexts and Manifests:** Use the `usedConfig` system to manage additional configurations:
+
+#### Setting Active Configuration
+```bash
+# Set which context and manifest keys to use by default
+curl -X POST 'https://your-server/api/sync/usedconfig' \
+  --header 'Content-Type: application/json' \
+  --data-raw '{
+    "context": "customerServiceContext",
+    "manifest": "limitedToolSet"
+  }'
+```
+
+#### Workflow for Adding New Configurations
+1. **Upload Your Context**: Store your custom context document
+   ```bash
+   curl -X POST 'https://your-server/api/sync/context' \
+     --header 'Content-Type: application/json' \
+     --data-raw '{"myCustomContext": "Your context content here..."}'
+   ```
+
+2. **Upload Your Manifest**: Store your custom tool manifest
+   ```bash
+   curl -X POST 'https://your-server/api/sync/toolmanifest' \
+     --header 'Content-Type: application/json' \
+     --data-raw '{"myCustomTools": {"tools": [...]}}'
+   ```
+
+3. **Set as Active Configuration**: Update the system to use your new configurations
+   ```bash
+   curl -X POST 'https://your-server/api/sync/usedconfig' \
+     --data-raw '{"context": "myCustomContext", "manifest": "myCustomTools"}'
+   ```
+
+4. **Verify Configuration**: Check that your configurations are active
+   ```bash
+   curl 'https://your-server/api/sync/usedconfig'
+   ```
+
+**📋 Configuration Management:**
+- **Default Fallback**: System uses `defaultContext` and `defaultToolManifest` if no `usedConfig` is set
+- **Per-Call Override**: Individual calls can specify custom `contextKey`/`manifestKey` via WebSocket parameters
+- **Runtime Updates**: Active calls can be updated using the `/updateResponseService` endpoint
+- **Centralized Control**: `usedConfig` sets the system-wide default configuration for new calls
+
+### Benefits of Sync Maps Configuration
+
+- **Cloud-Native**: Leverages Twilio's enterprise infrastructure
+- **Real-Time Updates**: Configuration changes available immediately
+- **Dynamic Loading**: Different configurations per call without restarts
+- **Centralized Management**: Single source of truth across all instances
+- **Key-Based Access**: Simple key lookup for configuration retrieval
+- **Scalable Storage**: No local file dependencies or management overhead
+- **Automatic Setup**: Default configurations loaded automatically from local files
 
 ## Fly.io Deployment
 

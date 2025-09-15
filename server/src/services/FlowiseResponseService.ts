@@ -10,8 +10,8 @@ import { logOut, logError } from '../utils/logger.js';
 import { ResponseService, ContentResponse, ToolResult, ToolResultEvent, ResponseHandler } from '../interfaces/ResponseService.js';
 
 class FlowiseResponseService implements ResponseService {
-    private contextFile: string;
-    private toolManifestFile: string;
+    private context: string;
+    private toolManifest: object;
     private isInterrupted: boolean;
 
     // Unified response handler
@@ -23,22 +23,22 @@ class FlowiseResponseService implements ResponseService {
      * Use the static create() method for proper async initialization.
      */
     private constructor() {
-        this.contextFile = '';
-        this.toolManifestFile = '';
+        this.context = '';
+        this.toolManifest = {};
         this.isInterrupted = false;
     }
 
     /**
      * Creates a new FlowiseResponseService instance with proper async initialization.
      * 
-     * @param {string} contextFile - Path to the context.md file
-     * @param {string} toolManifestFile - Path to the toolManifest.json file
+     * @param {string} context - Context content string
+     * @param {object} toolManifest - Tool manifest object
      * @returns {Promise<FlowiseResponseService>} Fully initialized service instance
      */
-    static async create(contextFile: string, toolManifestFile: string): Promise<FlowiseResponseService> {
+    static async create(context: string, toolManifest: object): Promise<FlowiseResponseService> {
         const service = new FlowiseResponseService();
-        await service.updateContext(contextFile);
-        await service.updateTools(toolManifestFile);
+        await service.updateContext(context);
+        await service.updateTools(toolManifest);
         logOut('FlowiseResponseService', 'Service created and initialized');
         return service;
     }
@@ -109,16 +109,16 @@ class FlowiseResponseService implements ResponseService {
     }
 
     /**
-     * Updates the context file for the response service
+     * Updates the context for the response service
      * 
-     * @param contextFile - New context file path
+     * @param context - New context content string
      * @returns Promise that resolves when update is complete
      */
-    async updateContext(contextFile: string): Promise<void> {
+    async updateContext(context: string): Promise<void> {
         try {
-            logOut('FlowiseResponseService', `Updating context file: ${contextFile}`);
-            this.contextFile = contextFile;
-            // TODO: Implement actual file loading and context setup for Flowise
+            logOut('FlowiseResponseService', `Updating context content (${context.length} characters)`);
+            this.context = context;
+            // TODO: Implement actual context setup for Flowise
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             logError('FlowiseResponseService', `Error updating context: ${errorMessage}`);
@@ -126,16 +126,16 @@ class FlowiseResponseService implements ResponseService {
     }
 
     /**
-     * Updates the tool manifest file for the response service
+     * Updates the tool manifest for the response service
      * 
-     * @param toolManifestFile - New tool manifest file path
+     * @param toolManifest - New tool manifest object
      * @returns Promise that resolves when update is complete
      */
-    async updateTools(toolManifestFile: string): Promise<void> {
+    async updateTools(toolManifest: object): Promise<void> {
         try {
-            logOut('FlowiseResponseService', `Updating tool manifest: ${toolManifestFile}`);
-            this.toolManifestFile = toolManifestFile;
-            // TODO: Implement actual tool loading setup for Flowise
+            logOut('FlowiseResponseService', `Updating tool manifest with ${Object.keys(toolManifest).length} properties`);
+            this.toolManifest = toolManifest;
+            // TODO: Implement actual tool setup for Flowise
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             logError('FlowiseResponseService', `Error updating tools: ${errorMessage}`);

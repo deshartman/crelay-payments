@@ -1,0 +1,38 @@
+{
+    "ConversationRelay": {
+        "welcomeGreeting": "Hi! How can I help you today?",
+        "welcomeGreetingInterruptible": "",
+        "language": "",
+        "ttsLanguage": "",
+        "transcriptionProvider": "Deepgram",
+        "transcriptionLanguage": "",
+        "speechModel": "nova-3-general",
+        "hints": "",
+        "interruptible": "any",
+        "ttsProvider": "Elevenlabs",
+        "voice": "ZF6FPAbjXT4488VcRRnw",
+        "dtmfDetection": true,
+        "reportInputDuringAgentSpeech": "",
+        "preemptible": "",
+        "debug": "",
+        "elevenlabsTextNormalization": "",
+        "intelligenceService": ""
+    },
+    "Languages": [
+        {
+            "code": "en-GB",
+            "ttsProvider": "ElevenLabs",
+            "voice": "ZF6FPAbjXT4488VcRRnw"
+        },
+        {
+            "code": "en-US",
+            "ttsProvider": "ElevenLabs",
+            "voice": "1y13AZVBVdi3UwMhDhaI"
+        }
+    ],
+    "UsedConfig": {
+        "configuration": "defaultConfig",
+        "context": "defaultContext",
+        "manifest": "defaultToolManifest"
+    }
+}
