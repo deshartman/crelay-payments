@@ -15,14 +15,18 @@ interface SyncServiceMap {
 }
 
 /**
- * Private service class for handling Twilio Sync operations.
- * Manages Sync Services and Maps for configuration storage.
- * 
+ * Startup-only utility service for handling Twilio Sync operations.
+ * Manages Sync Services and Maps for configuration storage during server initialization.
+ *
  * Services Structure:
- * - "ConversationRelay": Configuration, Languages, UsedConfig
- * - "OpenAI": Context, ToolManifest
- * 
- * This service is used internally by TwilioService and should not be exposed directly.
+ * - "ConversationRelay": Configuration, Languages, UsedConfig, Context, ToolManifest
+ *
+ * This service is designed for:
+ * 1. Startup-only operations - pushing default assets to Sync
+ * 2. Loading all contexts/manifests into ContextCacheService
+ * 3. One-time initialization and setup
+ *
+ * Runtime operations should use ContextCacheService for performance.
  */
 class TwilioSyncService {
     private twilioClient: twilio.Twilio;
@@ -57,6 +61,52 @@ class TwilioSyncService {
         } catch (error) {
             logError('TwilioSyncService', `Failed to load asset file ${filename}: ${error instanceof Error ? error.message : String(error)}`);
             return null;
+        }
+    }
+
+    /**
+     * Loads all converted context files (from J2 templates) into Sync Context map
+     */
+    private async loadAllContextFiles(): Promise<void> {
+        try {
+            logOut('TwilioSyncService', 'Loading all converted context files...');
+
+            const assetsDir = path.join(__dirname, '..', '..', 'assets');
+            const files = await fs.readdir(assetsDir);
+
+            // Filter for context files (ending with Context.md)
+            const contextFiles = files.filter(file =>
+                file.endsWith('Context.md') &&
+                file !== 'defaultContext.md' // Skip default context as it's loaded separately
+            );
+
+            logOut('TwilioSyncService', `Found ${contextFiles.length} context files to load`);
+
+            for (const file of contextFiles) {
+                try {
+                    // Extract context name (remove Context.md suffix)
+                    const contextName = file.replace('Context.md', '');
+
+                    // Check if context already exists to avoid overwriting
+                    const existingContext = await this.getMapItem('ConversationRelay', 'Context', contextName);
+                    if (!existingContext) {
+                        // Load file content
+                        const content = await fs.readFile(path.join(assetsDir, file), 'utf-8');
+
+                        // Store in Sync with content wrapper for compatibility
+                        await this.setMapItem('ConversationRelay', 'Context', contextName, { content: content });
+                        logOut('TwilioSyncService', `✓ Loaded ${contextName} context (${content.length} chars)`);
+                    } else {
+                        logOut('TwilioSyncService', `- ${contextName} context already exists, skipping`);
+                    }
+                } catch (error) {
+                    logError('TwilioSyncService', `Failed to load context file ${file}: ${error instanceof Error ? error.message : String(error)}`);
+                }
+            }
+
+            logOut('TwilioSyncService', 'Completed loading context files');
+        } catch (error) {
+            logError('TwilioSyncService', `Failed to load context files: ${error instanceof Error ? error.message : String(error)}`);
         }
     }
 
@@ -166,10 +216,12 @@ class TwilioSyncService {
                     }
                 }
 
-                // Load UsedConfig section into UsedConfig document
-                if (configObj.UsedConfig) {
+                // Load UsedConfig section into UsedConfig document (only on first-time setup)
+                if (configObj.UsedConfig && loadDefaults) {
                     await this.setDocument('ConversationRelay', 'UsedConfig', configObj.UsedConfig);
                     logOut('TwilioSyncService', 'Loaded UsedConfig section into UsedConfig document');
+                } else if (!loadDefaults) {
+                    logOut('TwilioSyncService', 'Preserving existing UsedConfig document (restart mode)');
                 }
             }
 
@@ -191,6 +243,9 @@ class TwilioSyncService {
                         logOut('TwilioSyncService', 'defaultContext already exists, skipping');
                     }
                 }
+
+                // Load all converted context files from J2 templates
+                await this.loadAllContextFiles();
 
                 if (defaultManifest) {
                     // Check if defaultToolManifest already exists to avoid overwriting
@@ -444,6 +499,42 @@ class TwilioSyncService {
             logOut('TwilioSyncService', `Updated document ${serviceName}:${documentName}`);
         } catch (error) {
             logError('TwilioSyncService', `Failed to set document ${serviceName}:${documentName}: ${error instanceof Error ? error.message : String(error)}`);
+            throw error;
+        }
+    }
+
+    /**
+     * Pushes only default assets to Sync for quickstart
+     * Called during first-time setup to populate Sync with defaults
+     * Developers should manually manage their own contexts/manifests in Sync
+     */
+    async pushDefaultsToSync(): Promise<void> {
+        try {
+            logOut('TwilioSyncService', 'Pushing default assets to Sync for quickstart...');
+
+            // Load and push only the core defaults
+            const defaultContext = await this.loadAssetFile('defaultContext.md');
+            const defaultManifest = await this.loadAssetFile('defaultToolManifest.json');
+
+            if (defaultContext) {
+                const existingContext = await this.getMapItem('ConversationRelay', 'Context', 'defaultContext');
+                if (!existingContext) {
+                    await this.setMapItem('ConversationRelay', 'Context', 'defaultContext', { content: defaultContext });
+                    logOut('TwilioSyncService', 'Pushed defaultContext to Sync');
+                }
+            }
+
+            if (defaultManifest) {
+                const existingManifest = await this.getMapItem('ConversationRelay', 'ToolManifest', 'defaultToolManifest');
+                if (!existingManifest) {
+                    await this.setMapItem('ConversationRelay', 'ToolManifest', 'defaultToolManifest', defaultManifest);
+                    logOut('TwilioSyncService', 'Pushed defaultToolManifest to Sync');
+                }
+            }
+
+            logOut('TwilioSyncService', 'Default assets push completed');
+        } catch (error) {
+            logError('TwilioSyncService', `Failed to push defaults to Sync: ${error instanceof Error ? error.message : String(error)}`);
             throw error;
         }
     }

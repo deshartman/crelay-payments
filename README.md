@@ -2,11 +2,17 @@
 
 This is a reference implementation aimed at introducing the key concepts of Conversation Relay. The key here is to ensure it is a workable environment that can be used to understand the basic concepts of Conversation Relay. It is intentionally simple and only the minimum has been done to ensure the understanding is focussed on the core concepts.
 
-## Release v4.4.0
+## Release v4.4.2
 
-This release introduces **Direct Parameter Configuration Migration**, simplifying the architecture by migrating from file-based configuration to direct parameter passing for context and tool manifests. Services now receive configuration data directly as parameters, eliminating file I/O overhead and improving performance while providing greater flexibility for configuration sources.
+This release introduces **Performance Optimization Architecture** with in-memory caching and startup-only Sync operations. The system now uses a high-performance ContextCacheService to eliminate runtime Sync API calls and provides significant performance improvements for conversation handling.
 
-**✅ No Migration Required**: The system now uses direct parameter passing, eliminating the need for external configuration management systems.
+**Key Performance Improvements:**
+- **ContextCacheService**: In-memory caching eliminates runtime Sync API calls
+- **Startup-only Sync Operations**: TwilioSyncService now only loads defaults at startup
+- **Self-contained Context Switching**: Change-context tool performs context switching directly
+- **Reduced File Size**: Optimized intentContext.md from 31KB to 14.3KB while preserving functionality
+
+**✅ No Migration Required**: The system automatically uses the new performance architecture with backward compatibility.
 
 See the [CHANGELOG.md](./CHANGELOG.md) for detailed release history.
 
@@ -414,50 +420,46 @@ curl -X POST 'https://your-server/updateResponseService' \
 
 ### Managing Additional Configurations
 
-**🔧 Adding Custom Contexts and Manifests:** Use the `usedConfig` system to manage additional configurations:
+**🔧 Adding Custom Contexts and Manifests:** The system provides default configurations out-of-the-box, but you must add your own custom contexts and manifests directly to Twilio Sync to meet your specific business requirements.
 
-#### Setting Active Configuration
-```bash
-# Set which context and manifest keys to use by default
-curl -X POST 'https://your-server/api/sync/usedconfig' \
-  --header 'Content-Type: application/json' \
-  --data-raw '{
-    "context": "customerServiceContext",
-    "manifest": "limitedToolSet"
-  }'
-```
+#### Required Setup for Custom Configurations
 
-#### Workflow for Adding New Configurations
-1. **Upload Your Context**: Store your custom context document
+**IMPORTANT**: The system includes only basic default files for demonstration. For production use, you must upload your own context documents and tool manifests to Twilio Sync Maps:
+
+1. **Upload Your Custom Context**: Add your business-specific context documents to Sync
    ```bash
    curl -X POST 'https://your-server/api/sync/context' \
      --header 'Content-Type: application/json' \
-     --data-raw '{"myCustomContext": "Your context content here..."}'
+     --data-raw '{"myBusinessContext": "Your custom context content here..."}'
    ```
 
-2. **Upload Your Manifest**: Store your custom tool manifest
+2. **Upload Your Custom Manifest**: Add your custom tool configurations to Sync
    ```bash
    curl -X POST 'https://your-server/api/sync/toolmanifest' \
      --header 'Content-Type: application/json' \
-     --data-raw '{"myCustomTools": {"tools": [...]}}'
+     --data-raw '{"myBusinessTools": {"tools": [...]}}'
    ```
 
-3. **Set as Active Configuration**: Update the system to use your new configurations
+3. **Set as Active Configuration**: Configure the system to use your custom configurations
    ```bash
    curl -X POST 'https://your-server/api/sync/usedconfig' \
-     --data-raw '{"context": "myCustomContext", "manifest": "myCustomTools"}'
+     --data-raw '{"context": "myBusinessContext", "manifest": "myBusinessTools"}'
    ```
 
-4. **Verify Configuration**: Check that your configurations are active
+4. **Verify Configuration**: Confirm your configurations are loaded
    ```bash
    curl 'https://your-server/api/sync/usedconfig'
    ```
 
-**📋 Configuration Management:**
-- **Default Fallback**: System uses `defaultContext` and `defaultToolManifest` if no `usedConfig` is set
+#### Configuration Management Architecture
+
+**📋 How Configuration Works:**
+- **Default Files**: Basic `defaultContext.md` and `defaultToolManifest.json` included for initial setup only
+- **Sync Maps Storage**: All configurations stored in Twilio Sync Maps for cloud access
+- **In-Memory Caching**: ContextCacheService provides high-performance access after startup
+- **Direct Upload Required**: You must upload your own contexts/manifests to Sync for production use
 - **Per-Call Override**: Individual calls can specify custom `contextKey`/`manifestKey` via WebSocket parameters
 - **Runtime Updates**: Active calls can be updated using the `/updateResponseService` endpoint
-- **Centralized Control**: `usedConfig` sets the system-wide default configuration for new calls
 
 ### Benefits of Sync Maps Configuration
 

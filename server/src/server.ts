@@ -14,6 +14,7 @@ import { logOut, logError } from './utils/logger.js';
 // Import the services
 import { ConversationRelayService } from './services/ConversationRelayService.js'
 import { TwilioService } from './services/TwilioService.js';
+import { ContextCacheService } from './services/ContextCacheService.js';
 import type { IncomingMessage, OutgoingMessage, SessionData } from './interfaces/ConversationRelay.js';
 
 
@@ -47,29 +48,6 @@ const wsInstance = expressWs(app);     // Initialize express-ws
 app.use(express.urlencoded({ extended: true }));    // For Twilio url encoded body
 app.use(express.json());    // For JSON payloads
 
-/**
- * Helper function to get default context and manifest keys from usedConfig
- */
-async function getDefaultKeys(): Promise<{ contextKey: string; manifestKey: string }> {
-    try {
-        const contextKey = await twilioService.getUsedConfig('context');
-        const manifestKey = await twilioService.getUsedConfig('manifest');
-        if (contextKey && manifestKey) {
-            return {
-                contextKey: contextKey,
-                manifestKey: manifestKey
-            };
-        }
-    } catch (error) {
-        logError('Server', `Failed to load usedConfig, using fallback defaults: ${error instanceof Error ? error.message : String(error)}`);
-    }
-
-    // Fallback to hardcoded defaults if usedConfig is not available
-    return {
-        contextKey: 'defaultContext',
-        manifestKey: 'defaultToolManifest'
-    };
-}
 
 /**
  * This parameterDataMap illustrates how you would pass data via Conversation Relay Parameters.
@@ -79,24 +57,21 @@ async function getDefaultKeys(): Promise<{ contextKey: string; manifestKey: stri
 let wsSessionsMap = new Map<string, WSSession>();
 let parameterDataMap = new Map<string, { requestData: any }>();
 const twilioService = new TwilioService();
+let contextCacheService: ContextCacheService | null = null;
 
-// Cached assets loaded at startup
-let cachedContext: any = null;
-let cachedManifest: any = null;
-
-// Initialize TwilioService and Sync Services/Maps
+// Initialize TwilioService and ContextCacheService
 (async () => {
     try {
         await twilioService.initialize();
         logOut('Server', 'TwilioService initialized successfully');
 
-        // Load default assets for caching
-        const defaultKeys = await getDefaultKeys();
-        cachedContext = await twilioService.getContext(defaultKeys.contextKey);
-        cachedManifest = await twilioService.getToolManifest(defaultKeys.manifestKey);
-        logOut('Server', `Cached default assets: context (${typeof cachedContext === 'object' && cachedContext.content ? cachedContext.content.length : 'unknown'} chars), manifest (${Object.keys(cachedManifest || {}).length} keys)`);
+        // Initialize ContextCacheService with TwilioSyncService
+        const syncService = (twilioService as any).syncService; // Access internal sync service
+        contextCacheService = new ContextCacheService(syncService);
+        await contextCacheService.initialize();
+        logOut('Server', 'ContextCacheService initialized successfully');
     } catch (error) {
-        logError('Server', `Failed to initialize TwilioService: ${error instanceof Error ? error.message : String(error)}`);
+        logError('Server', `Failed to initialize services: ${error instanceof Error ? error.message : String(error)}`);
     }
 })();
 
@@ -156,31 +131,22 @@ app.ws('/conversation-relay', (ws: any, req: express.Request) => {
                     sessionData.parameterData = parameterDataMap.get(message.customParameters.callReference) || { requestData: {} };
                 }
 
-                // Use cached assets or load custom ones if specified
-                let context: string;
-                let manifest: object;
-
-                if (message.customParameters?.contextKey || message.customParameters?.manifestKey) {
-                    // Custom keys provided, need to load from Sync
-                    const defaultKeys = await getDefaultKeys();
-                    const contextKey = message.customParameters?.contextKey || defaultKeys.contextKey;
-                    const manifestKey = message.customParameters?.manifestKey || defaultKeys.manifestKey;
-
-                    logOut('WS', `Loading custom assets with contextKey: ${contextKey} and manifestKey: ${manifestKey}`);
-                    const contextData = await twilioService.getContext(contextKey);
-                    context = typeof contextData === 'object' && contextData.content ? contextData.content : contextData;
-                    manifest = await twilioService.getToolManifest(manifestKey);
-                } else {
-                    // Use cached default assets
-                    logOut('WS', `Using cached default assets`);
-                    context = typeof cachedContext === 'object' && cachedContext.content ? cachedContext.content : cachedContext;
-                    manifest = cachedManifest;
+                // Ensure ContextCacheService is available
+                if (!contextCacheService) {
+                    throw new Error('ContextCacheService not initialized');
                 }
+
+                // Log any custom parameters for debugging
+                if (message.customParameters?.contextKey || message.customParameters?.manifestKey) {
+                    logOut('WS', `Custom parameters provided: contextKey=${message.customParameters.contextKey}, manifestKey=${message.customParameters.manifestKey}`);
+                    logOut('WS', `Note: Custom context/manifest selection will be available in future versions`);
+                }
+
+                logOut('WS', `Creating ConversationRelayService with ContextCacheService`);
 
                 conversationRelaySession = await ConversationRelayService.create(
                     sessionData,
-                    context,
-                    manifest,
+                    contextCacheService,
                     message.callSid
                 );
 
@@ -371,42 +337,68 @@ app.post('/updateResponseService', async (req: express.Request, res: express.Res
     const requestData: RequestData = req.body;
     logOut('Server', `Received request to update Response Service with data: ${JSON.stringify(requestData)}`);
 
-    // This loads the initial context and manifest using Sync keys
-    let callSid = requestData.callSid;
-    const defaultKeys = await getDefaultKeys();
-    let contextKey = requestData.contextKey || defaultKeys.contextKey;
-    let manifestKey = requestData.manifestKey || defaultKeys.manifestKey;
-
-    if (callSid && contextKey && manifestKey) {
-        logOut('Server', `Changing context and manifest for call SID: ${callSid} to keys: ${contextKey} and ${manifestKey}`);
-
-        // Get the session objects from the wsSessionsMap
-        let wsSession = wsSessionsMap.get(callSid);
-
-        if (wsSession) {
-            let conversationRelaySession = wsSession.conversationRelaySession;
-            
-            // Get content from TwilioService using Sync keys
-            const context = await twilioService.getContext(contextKey);
-            const toolManifest = await twilioService.getToolManifest(manifestKey);
-
-            if (!context) {
-                res.status(400).json({ success: false, error: `Context not found for key: ${contextKey}` });
-                return;
-            }
-
-            if (!toolManifest) {
-                res.status(400).json({ success: false, error: `Tool manifest not found for key: ${manifestKey}` });
-                return;
-            }
-
-            // Now update the context and manifest content for the sessionResponseService
-            await conversationRelaySession.updateContext(context);
-            await conversationRelaySession.updateTools(toolManifest);
+    try {
+        if (!contextCacheService) {
+            res.status(500).json({ success: false, error: 'ContextCacheService not initialized' });
+            return;
         }
-    }
 
-    res.json({ success: true });
+        const callSid = requestData.callSid;
+        const contextKey = requestData.contextKey;
+        const manifestKey = requestData.manifestKey;
+
+        if (callSid && (contextKey || manifestKey)) {
+            logOut('Server', `Updating context and/or manifest for call SID: ${callSid} to keys: ${contextKey} and ${manifestKey}`);
+
+            // Get the session objects from the wsSessionsMap
+            const wsSession = wsSessionsMap.get(callSid);
+
+            if (wsSession) {
+                const conversationRelaySession = wsSession.conversationRelaySession;
+
+                // Get content from ContextCacheService
+                let context: string;
+                let toolManifest: object;
+
+                if (contextKey) {
+                    const cachedContext = contextCacheService.getContext(contextKey);
+                    if (!cachedContext) {
+                        res.status(400).json({ success: false, error: `Context not found for key: ${contextKey}` });
+                        return;
+                    }
+                    context = cachedContext;
+                } else {
+                    context = contextCacheService.getUsedAssets().context;
+                }
+
+                if (manifestKey) {
+                    const cachedManifest = contextCacheService.getManifest(manifestKey);
+                    if (!cachedManifest) {
+                        res.status(400).json({ success: false, error: `Tool manifest not found for key: ${manifestKey}` });
+                        return;
+                    }
+                    toolManifest = cachedManifest;
+                } else {
+                    toolManifest = contextCacheService.getUsedAssets().manifest;
+                }
+
+                // Update the context and manifest content for the sessionResponseService
+                await conversationRelaySession.updateContext(context);
+                await conversationRelaySession.updateTools(toolManifest);
+            } else {
+                res.status(404).json({ success: false, error: `Session not found for call SID: ${callSid}` });
+                return;
+            }
+        } else {
+            res.status(400).json({ success: false, error: 'callSid and at least one of contextKey or manifestKey are required' });
+            return;
+        }
+
+        res.json({ success: true });
+    } catch (error) {
+        logError('Server', `Error updating response service: ${error instanceof Error ? error.message : String(error)}`);
+        res.status(500).json({ success: false, error: error instanceof Error ? error.message : String(error) });
+    }
 });
 
 /****************************************************

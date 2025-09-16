@@ -1,5 +1,56 @@
 # Changelog
 
+## Release v4.4.2
+
+### Performance Optimization Architecture
+
+#### High-Performance Caching Implementation
+- **ContextCacheService**: Implemented in-memory caching system to eliminate runtime Sync API calls
+  - Uses Map-based storage for instant context and manifest retrieval
+  - Provides deep copies to ensure session independence
+  - Implements `getUsedAssets()`, `getContext()`, `getManifest()`, and `getAssetsForContextSwitch()` methods
+- **Startup-Only Sync Operations**: Modified TwilioSyncService to only push defaults and load cache at startup
+  - Eliminates per-session Sync API overhead
+  - Maintains cloud storage benefits while providing local performance
+- **Service Architecture Optimization**: Reduced service creation overhead with direct cache access
+  - OpenAIResponseService now receives ContextCacheService directly
+  - ConversationRelayService simplified to pass ContextCacheService reference only
+
+#### Self-Contained Context Switching
+- **Enhanced change-context Tool**: Tool now performs context switching directly without service boundary crossing
+  - Receives OpenAI and ContextCacheService references via dependency injection
+  - Performs context switching internally: `openaiService.updateContext()` and `openaiService.updateTools()`
+  - Inserts handoff summary into conversation before switching contexts
+- **Service Reference Injection**: Added pattern for tools requiring direct service access
+  - Special handling in OpenAIResponseService for change-context tool
+  - Injects `_openaiService` and `_contextCacheService` parameters for self-contained operation
+
+#### Code Cleanup and Interface Simplification
+- **Removed ContextLoader Interface**: Eliminated unused interface as part of architecture simplification
+- **Updated Service Dependencies**: Simplified service creation patterns with direct cache access
+- **Enhanced WebSocket Logic**: Streamlined server initialization with ContextCacheService integration
+
+### Performance Benefits
+
+#### Runtime Performance
+- **Eliminated Sync API Calls**: In-memory cache provides instant access to contexts and manifests
+- **Reduced Service Creation Overhead**: Direct parameter passing without complex loading mechanisms
+- **Faster Context Switching**: Self-contained tool execution without service boundary crossing
+- **Lower Memory Usage**: Optimized architecture reduces memory footprint
+
+#### Startup Performance
+- **One-Time Sync Operations**: All Sync interactions happen only at startup
+- **Batch Configuration Loading**: All contexts and manifests loaded into cache simultaneously
+- **Persistent Cache**: In-memory cache persists for entire server lifetime
+
+#### Developer Experience
+- **Simplified Architecture**: Cleaner service boundaries with direct cache access
+- **Self-Contained Tools**: Context switching tools handle their own execution flow
+- **Better Error Handling**: Simplified error paths with direct service access
+- **Maintainable Code**: Reduced complexity with fewer abstraction layers
+
+This release provides significant performance improvements while maintaining full backward compatibility and preserving all existing functionality.
+
 ## Release v4.4.1
 
 ### Language Configuration Optimization

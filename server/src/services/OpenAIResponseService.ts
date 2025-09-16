@@ -64,6 +64,7 @@ import type { ResponseInput, ResponseStreamEvent } from 'openai/resources/respon
 
 import { logOut, logError } from '../utils/logger.js';
 import { ResponseService, ContentResponse, ToolResult, ToolResultEvent, ResponseHandler } from '../interfaces/ResponseService.js';
+import { ContextCacheService } from './ContextCacheService.js';
 
 dotenv.config();
 
@@ -95,6 +96,7 @@ class OpenAIResponseService implements ResponseService {
     protected toolDefinitions: any[];
     protected loadedTools: Record<string, ToolFunction>;
     protected inputMessages: ResponseInput;
+    protected contextCacheService: ContextCacheService;
 
     // Unified response handler
     private responseHandler!: ResponseHandler;
@@ -103,8 +105,10 @@ class OpenAIResponseService implements ResponseService {
      * Private constructor for ResponseService instance.
      * Initializes client and sets up initial state with synchronous operations only.
      * Use the static create() method for proper async initialization.
+     *
+     * @param {ContextCacheService} contextCacheService - Cache service for context and manifest access
      */
-    private constructor() {
+    private constructor(contextCacheService: ContextCacheService) {
         this.openai = new OpenAI();
         this.model = process.env.OPENAI_MODEL || "gpt-4o";
         this.currentResponseId = null;
@@ -114,21 +118,25 @@ class OpenAIResponseService implements ResponseService {
         this.toolDefinitions = [];
         this.loadedTools = {};
         this.inputMessages = [];
+        this.contextCacheService = contextCacheService;
     }
 
     /**
      * Creates a new ResponseService instance with proper async initialization.
-     * Initializes client, loads tools from manifest, and sets up initial state.
+     * Gets context and manifest from ContextCacheService using usedConfig keys.
      *
-     * @param {string} context - Context content for the conversation
-     * @param {object} manifest - Tool manifest object for the conversation
+     * @param {ContextCacheService} contextCacheService - Cache service for context and manifest access
      * @returns {Promise<OpenAIResponseService>} Fully initialized service instance
-     * @throws {Error} If tool loading fails
+     * @throws {Error} If context cache service is not available or initialization fails
      */
-    static async create(context: string, manifest: object): Promise<OpenAIResponseService> {
-        const service = new OpenAIResponseService();
-        await service.updateContext(context);
-        await service.updateTools(manifest);
+    static async create(contextCacheService: ContextCacheService): Promise<OpenAIResponseService> {
+        const service = new OpenAIResponseService(contextCacheService);
+
+        // Get context and manifest based on usedConfig
+        const usedAssets = contextCacheService.getUsedAssets();
+        await service.updateContext(usedAssets.context);
+        await service.updateTools(usedAssets.manifest);
+
         return service;
     }
 
@@ -153,7 +161,15 @@ class OpenAIResponseService implements ResponseService {
             const calledTool: ToolFunction = this.loadedTools[tool.name];
             const calledToolArgs = JSON.parse(tool.arguments);
 
-            // Call the tool with arguments only
+            // Special handling for change-context tool: Add service references to enable self-contained context switching
+            // This approach keeps the tool interface clean for all other tools while allowing change-context
+            // to access the services it needs to update context and manifest directly within the tool execution
+            if (tool.name === 'change-context') {
+                calledToolArgs._openaiService = this;
+                calledToolArgs._contextCacheService = this.contextCacheService;
+            }
+
+            // Call the tool with arguments
             const toolResponse: ToolResult = await calledTool(calledToolArgs);
 
             // Always pass tool results to higher-level service for processing
