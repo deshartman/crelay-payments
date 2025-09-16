@@ -15,16 +15,20 @@
  * comparing it against configurable thresholds. When thresholds are exceeded, it triggers
  * either reminder messages or call termination through a callback system.
  * 
- * @property {number} silenceSecondsThreshold - Seconds of silence before triggering response (default: 20)
- * @property {number} silenceRetryThreshold - Maximum reminder attempts before ending call (default: 3)
+ * @property {SilenceDetectionConfig} config - Configuration object with thresholds and messages
  * @property {number} lastMessageTime - Timestamp of the last received message
  * @property {NodeJS.Timeout} silenceTimer - Interval timer for silence monitoring
- * @property {number} silenceRetryCount - Current count of silence reminder attempts
+ * @property {number} currentMessageIndex - Current index in the messages array
  * @property {Function} messageCallback - Callback function for handling silence responses
  * 
  * @example
  * // Initialize and start silence monitoring
- * const silenceHandler = new SilenceHandler();
+ * const config = {
+ *   enabled: true,
+ *   secondsThreshold: 20,
+ *   messages: ["Still there?", "Are you still on the line?"]
+ * };
+ * const silenceHandler = new SilenceHandler(config);
  * 
  * silenceHandler.startMonitoring((message) => {
  *   switch(message.type) {
@@ -52,7 +56,8 @@
  * - 'prompt': Interactive prompts (resets silence timer)
  */
 
-import { logOut, logError } from '../utils/logger.js';
+import { logOut } from '../utils/logger.js';
+import type { SilenceDetectionConfig } from './ContextCacheService.js';
 
 /**
  * Interface for silence breaker text message
@@ -82,22 +87,21 @@ type SilenceHandlerMessage = SilenceBreakerTextMessage | EndCallMessage;
 type MessageCallback = (message: SilenceHandlerMessage) => void;
 
 class SilenceHandler {
-    private silenceSecondsThreshold: number;
-    private silenceRetryThreshold: number;
+    private config: SilenceDetectionConfig;
     private lastMessageTime: number | null;
     private silenceTimer: NodeJS.Timeout | null;
-    private silenceRetryCount: number;
+    private currentMessageIndex: number;
     private messageCallback: MessageCallback | null;
 
     /**
      * Creates a new SilenceHandler instance.
+     * @param config - Silence detection configuration object
      */
-    constructor() {
-        this.silenceSecondsThreshold = Number(process.env.SILENCE_SECONDS_THRESHOLD) || 20;
-        this.silenceRetryThreshold = Number(process.env.SILENCE_RETRY_THRESHOLD) || 3;
+    constructor(config: SilenceDetectionConfig) {
+        this.config = config;
         this.lastMessageTime = null;
         this.silenceTimer = null;
-        this.silenceRetryCount = 0;
+        this.currentMessageIndex = 0;
         this.messageCallback = null;
     }
 
@@ -118,24 +122,16 @@ class SilenceHandler {
 
     /**
      * Creates a silence breaker reminder message.
-     * 
+     *
      * @returns {SilenceBreakerTextMessage} Message object with text type and reminder content
      */
     createSilenceBreakerMessage(): SilenceBreakerTextMessage {
-        // Select a different silence breaker message depending how many times you have asked
-        if (this.silenceRetryCount === 1) {
-            return {
-                type: 'text',
-                token: "Still there?",
-                last: true
-            };
-        } else {
-            return {
-                type: 'text',
-                token: "Just checking you are still there?",
-                last: true
-            };
-        }
+        const messageText = this.config.messages[this.currentMessageIndex] || "Are you still there?";
+        return {
+            type: 'text',
+            token: messageText,
+            last: true
+        };
     }
 
     /**
@@ -151,16 +147,15 @@ class SilenceHandler {
             if (this.lastMessageTime === null) return;
 
             const silenceTime = (Date.now() - this.lastMessageTime) / 1000; // Convert to seconds
-            if (silenceTime >= this.silenceSecondsThreshold) {
-                this.silenceRetryCount++;
-                logOut('Silence', `SILENCE BREAKER - No messages for ${this.silenceSecondsThreshold}+ seconds (Retry count: ${this.silenceRetryCount}/${this.silenceRetryThreshold})`);
+            if (silenceTime >= this.config.secondsThreshold) {
+                logOut('Silence', `SILENCE BREAKER - No messages for ${this.config.secondsThreshold}+ seconds (Message ${this.currentMessageIndex + 1}/${this.config.messages.length})`);
 
-                if (this.silenceRetryCount >= this.silenceRetryThreshold) {
-                    // End the call if we've exceeded the retry threshold
+                if (this.currentMessageIndex >= this.config.messages.length) {
+                    // End the call if we've exhausted all messages
                     if (this.silenceTimer) {
                         clearInterval(this.silenceTimer);
                     }
-                    // logOut('Silence', 'Ending call due to exceeding silence retry threshold');
+                    logOut('Silence', 'Ending call due to exhausting all silence reminder messages');
                     if (this.messageCallback) {
                         this.messageCallback(this.createEndCallMessage());
                     }
@@ -169,6 +164,7 @@ class SilenceHandler {
                     if (this.messageCallback) {
                         this.messageCallback(this.createSilenceBreakerMessage());
                     }
+                    this.currentMessageIndex++;
                 }
                 // Reset the timer after sending the message or ending the call
                 this.lastMessageTime = Date.now();
@@ -182,11 +178,11 @@ class SilenceHandler {
     resetTimer(): void {
         if (this.lastMessageTime !== null) {
             this.lastMessageTime = Date.now();
-            // Reset the retry count when we get a valid message
-            this.silenceRetryCount = 0;
-            // logOut('Silence', 'Timer and retry count reset');
+            // Reset the message index when we get a valid message
+            this.currentMessageIndex = 0;
+            logOut('Silence', 'Timer and message index reset');
         } else {
-            // logOut('Silence', 'Message received but monitoring not yet started');
+            logOut('Silence', 'Message received but monitoring not yet started');
         }
     }
 

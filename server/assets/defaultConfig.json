@@ -31,6 +31,15 @@
     "UsedConfig": {
         "configuration": "defaultConfig",
         "context": "defaultContext",
-        "manifest": "defaultToolManifest"
+        "manifest": "defaultToolManifest",
+        "silenceDetection": {
+            "enabled": false,
+            "secondsThreshold": 20,
+            "messages": [
+                "Still there?",
+                "Just checking you are still there?",
+                "Hello? Are you still on the line?"
+            ]
+        }
     }
 }
