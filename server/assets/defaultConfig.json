@@ -23,8 +23,16 @@
     ],
     "UsedConfig": {
         "configuration": "defaultConfig",
-        "context": "ivrWalkContext",
-        "manifest": "ivrWalkToolManifest",
-        "silenceDetection": "false"
+        "context": "defaultContext",
+        "manifest": "defaultToolManifest",
+        "silenceDetection": {
+            "enabled": false,
+            "secondsThreshold": 20,
+            "messages": [
+                "Still there?",
+                "Just checking you are still there?",
+                "Hello? Are you still on the line?"
+            ]
+        }
     }
 }

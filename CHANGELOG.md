@@ -1,5 +1,71 @@
 # Changelog
 
+## Release v4.4.3
+
+### Enhanced Silence Detection Configuration System
+
+#### Centralized Configuration Architecture
+- **Complete Configuration Object**: Replaced simple boolean `silenceDetection: false` with comprehensive configuration object:
+  ```json
+  "silenceDetection": {
+    "enabled": false,
+    "secondsThreshold": 20,
+    "messages": [
+      "Still there?",
+      "Just checking you are still there?",
+      "Hello? Are you still on the line?"
+    ]
+  }
+  ```
+- **Eliminated Hardcoded Values**: Removed hardcoded fallbacks (`SILENCE_SECONDS_THRESHOLD`, `SILENCE_RETRY_THRESHOLD`) from SilenceHandler in favor of centralized JSON configuration
+- **Enhanced ContextCacheService**: Extended to support new silence detection configuration structure with proper TypeScript interfaces
+
+#### Flexible Message Array System
+- **Array-Based Message Progression**: Replaced hardcoded retry threshold logic with elegant message array iteration
+- **Dynamic Message Count**: Support for any number of escalation messages without code changes
+- **Configurable Thresholds**: Easy modification of silence detection timing through JSON configuration
+- **Message Index Management**: Proper reset of message progression when conversation resumes
+
+#### Architecture Improvements
+- **SilenceDetectionConfig Interface**: New TypeScript interface defining configuration structure with `enabled`, `secondsThreshold`, and `messages` properties
+- **Constructor-Based Configuration**: SilenceHandler now accepts configuration object instead of reading environment variables
+- **Conditional Service Creation**: ConversationRelayService only creates SilenceHandler when `config.enabled === true`
+- **Type-Safe Configuration**: Complete TypeScript support with proper interfaces and type checking
+
+#### Service Integration Enhancements
+- **Enhanced getUsedAssets()**: ContextCacheService now returns silence detection configuration alongside context and manifest
+- **Factory Method Updates**: ConversationRelayService.create() passes full configuration object to SilenceHandler constructor
+- **Clean Separation**: Clear distinction between configuration loading (ContextCacheService) and service creation (ConversationRelayService)
+- **Default Configuration**: Fallback configuration provided when not specified in JSON
+
+### Benefits of Enhanced Silence Detection
+
+#### Configuration Flexibility
+- **No Code Changes Required**: Modify silence thresholds and messages through JSON configuration
+- **A/B Testing Support**: Easy testing of different message strategies and timing
+- **Dynamic Message Count**: Add or remove escalation messages without recompiling
+- **Environment-Specific Settings**: Different configurations for development, staging, and production
+
+#### Improved User Experience
+- **Customizable Messaging**: Tailored silence reminder messages for different use cases
+- **Configurable Timing**: Adjustable silence thresholds for different conversation types
+- **Proper Message Progression**: Logical escalation through configured message sequence
+- **Clean Call Termination**: Graceful ending when all reminder messages are exhausted
+
+#### Developer Experience
+- **Type Safety**: Complete TypeScript support with IntelliSense and compile-time validation
+- **Centralized Configuration**: All silence detection settings in one location
+- **Consistent Architecture**: Follows established configuration patterns from existing system
+- **Easy Testing**: Simple configuration changes for testing different scenarios
+
+#### Maintainability
+- **Eliminated Hardcoded Values**: No more scattered constants or missing environment variables
+- **Single Source of Truth**: All silence detection configuration in JSON
+- **Clean Service Boundaries**: Clear responsibility separation between services
+- **Future Extensibility**: Architecture supports additional silence detection features
+
+This release provides a comprehensive silence detection configuration system that eliminates hardcoded values while providing maximum flexibility for customizing silence handling behavior through simple JSON configuration changes.
+
 ## Release v4.4.2
 
 ### Performance Optimization Architecture

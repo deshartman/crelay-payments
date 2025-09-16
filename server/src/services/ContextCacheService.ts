@@ -28,6 +28,12 @@
 import { logOut, logError } from '../utils/logger.js';
 import { TwilioSyncService } from './TwilioSyncService.js';
 
+interface SilenceDetectionConfig {
+    enabled: boolean;
+    secondsThreshold: number;
+    messages: string[];
+}
+
 interface CachedAssets {
     contexts: Map<string, string>;
     manifests: Map<string, object>;
@@ -35,6 +41,7 @@ interface CachedAssets {
         context: string;
         manifest: string;
         configuration?: string;
+        silenceDetection?: SilenceDetectionConfig;
     };
 }
 
@@ -100,7 +107,7 @@ class ContextCacheService {
      * Gets the currently used context and manifest based on UsedConfig
      * Returns fresh copies for each session
      */
-    getUsedAssets(): { context: string; manifest: object } {
+    getUsedAssets(): { context: string; manifest: object; silenceDetection: SilenceDetectionConfig } {
         this.ensureInitialized();
 
         const defaultContextKey = this.cache!.usedConfig.context;
@@ -109,10 +116,18 @@ class ContextCacheService {
         const context = this.cache!.contexts.get(defaultContextKey) || '';
         const manifest = this.cache!.manifests.get(defaultManifestKey) || {};
 
+        // Default silence detection config if not provided
+        const defaultSilenceConfig: SilenceDetectionConfig = {
+            enabled: true,
+            secondsThreshold: 20,
+            messages: ["Still there?", "Just checking you are still there?"]
+        };
+
         // Return deep copies to ensure session independence
         return {
             context: context,
-            manifest: JSON.parse(JSON.stringify(manifest))
+            manifest: JSON.parse(JSON.stringify(manifest)),
+            silenceDetection: this.cache!.usedConfig.silenceDetection ?? defaultSilenceConfig
         };
     }
 
@@ -208,4 +223,4 @@ class ContextCacheService {
     }
 }
 
-export { ContextCacheService };
+export { ContextCacheService, SilenceDetectionConfig };

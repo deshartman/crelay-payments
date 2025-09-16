@@ -2,17 +2,23 @@
 
 This is a reference implementation aimed at introducing the key concepts of Conversation Relay. The key here is to ensure it is a workable environment that can be used to understand the basic concepts of Conversation Relay. It is intentionally simple and only the minimum has been done to ensure the understanding is focussed on the core concepts.
 
-## Release v4.4.2
+## Release v4.4.3
 
-This release introduces **Performance Optimization Architecture** with in-memory caching and startup-only Sync operations. The system now uses a high-performance ContextCacheService to eliminate runtime Sync API calls and provides significant performance improvements for conversation handling.
+This release introduces **Enhanced Silence Detection Configuration System** with centralized JSON configuration, eliminating hardcoded values and providing maximum flexibility for customizing silence handling behavior.
 
-**Key Performance Improvements:**
-- **ContextCacheService**: In-memory caching eliminates runtime Sync API calls
-- **Startup-only Sync Operations**: TwilioSyncService now only loads defaults at startup
-- **Self-contained Context Switching**: Change-context tool performs context switching directly
-- **Reduced File Size**: Optimized intentContext.md from 31KB to 14.3KB while preserving functionality
+**Key Configuration Improvements:**
+- **Centralized Configuration**: Complete silence detection configuration through JSON object
+- **Flexible Message Arrays**: Support for any number of escalation messages without code changes
+- **Eliminated Hardcoded Values**: No more environment variables or scattered constants
+- **Type-Safe Configuration**: Full TypeScript support with proper interfaces
 
-**✅ No Migration Required**: The system automatically uses the new performance architecture with backward compatibility.
+**Enhanced Silence Detection Features:**
+- **Configurable Thresholds**: Easy modification of silence detection timing
+- **Custom Messages**: Tailored silence reminder messages for different use cases
+- **Dynamic Message Count**: Add or remove escalation messages without recompiling
+- **A/B Testing Support**: Easy testing of different message strategies and timing
+
+**✅ Backward Compatible**: Existing configurations automatically use sensible defaults.
 
 See the [CHANGELOG.md](./CHANGELOG.md) for detailed release history.
 
@@ -470,6 +476,97 @@ curl -X POST 'https://your-server/updateResponseService' \
 - **Key-Based Access**: Simple key lookup for configuration retrieval
 - **Scalable Storage**: No local file dependencies or management overhead
 - **Automatic Setup**: Default configurations loaded automatically from local files
+
+## Silence Detection Configuration
+
+Version 4.4.3 introduces a comprehensive silence detection configuration system that eliminates hardcoded values and provides maximum flexibility for customizing silence handling behavior.
+
+### Configuration Structure
+
+Silence detection is configured through the `UsedConfig.silenceDetection` object in `defaultConfig.json`:
+
+```json
+{
+  "UsedConfig": {
+    "configuration": "defaultConfig",
+    "context": "defaultContext",
+    "manifest": "defaultToolManifest",
+    "silenceDetection": {
+      "enabled": false,
+      "secondsThreshold": 20,
+      "messages": [
+        "Still there?",
+        "Just checking you are still there?",
+        "Hello? Are you still on the line?"
+      ]
+    }
+  }
+}
+```
+
+### Configuration Properties
+
+- **`enabled`** (boolean): Controls whether silence detection is active
+  - `true`: Silence detection operates normally
+  - `false`: No silence monitoring or timeout messages
+
+- **`secondsThreshold`** (number): Seconds of silence before triggering response
+  - Default: `20` seconds
+  - Configurable based on conversation type and user expectations
+
+- **`messages`** (array): Progressive reminder messages sent to user
+  - Array-based progression: System iterates through messages in order
+  - Flexible count: Add or remove messages without code changes
+  - Call termination: When all messages are exhausted, the call ends gracefully
+
+### How Silence Detection Works
+
+1. **Silence Monitoring**: System tracks time since last meaningful message
+2. **Message Progression**: When threshold exceeded, sends first message from array
+3. **Escalation**: Subsequent silence periods trigger next messages in sequence
+4. **Conversation Reset**: Valid user responses reset message index to beginning
+5. **Call Termination**: After all messages exhausted, call ends with "unresponsive" reason
+
+### Configuration Examples
+
+**Development/Testing Configuration:**
+```json
+"silenceDetection": {
+  "enabled": true,
+  "secondsThreshold": 5,
+  "messages": ["Quick test - still there?"]
+}
+```
+
+**Customer Service Configuration:**
+```json
+"silenceDetection": {
+  "enabled": true,
+  "secondsThreshold": 30,
+  "messages": [
+    "I'm sorry, I didn't catch that. Are you still there?",
+    "Hello? Can you hear me?",
+    "We seem to have lost connection. I'll end this call now."
+  ]
+}
+```
+
+**No Timeout Configuration:**
+```json
+"silenceDetection": {
+  "enabled": false,
+  "secondsThreshold": 20,
+  "messages": []
+}
+```
+
+### Benefits of Enhanced Configuration
+
+- **No Code Changes**: Modify thresholds and messages through JSON configuration
+- **A/B Testing**: Easy testing of different message strategies and timing
+- **Environment-Specific**: Different configurations for development, staging, production
+- **User Experience**: Customizable messaging tailored to specific use cases
+- **Type Safety**: Full TypeScript support with compile-time validation
 
 ## Fly.io Deployment
 

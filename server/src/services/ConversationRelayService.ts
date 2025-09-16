@@ -72,7 +72,7 @@ import { SilenceHandler } from './SilenceHandler.js';
 import { logOut, logError } from '../utils/logger.js';
 import { ContentResponse, ResponseService, ToolResultEvent } from '../interfaces/ResponseService.js';
 import { OpenAIResponseService } from './OpenAIResponseService.js';
-import { ContextCacheService } from './ContextCacheService.js';
+import { ContextCacheService, SilenceDetectionConfig } from './ContextCacheService.js';
 import { ConversationRelayHandler } from '../interfaces/ConversationRelay.js';
 import { ResponseHandler } from '../interfaces/ResponseService.js';
 import type { SessionData, IncomingMessage, OutgoingMessage, ConversationRelay } from '../interfaces/ConversationRelay.js';
@@ -94,16 +94,17 @@ class ConversationRelayService implements ConversationRelay {
      *
      * @param {ResponseService} responseService - LLM service for processing responses
      * @param {SessionData} sessionData - Session data for the conversation
+     * @param {SilenceDetectionConfig} silenceDetectionConfig - Silence detection configuration
      * @throws {Error} If responseService is not provided
      */
-    private constructor(responseService: ResponseService, sessionData: SessionData) {
+    private constructor(responseService: ResponseService, sessionData: SessionData, silenceDetectionConfig: SilenceDetectionConfig) {
         this.responseService = responseService;
         this.sessionData = sessionData;
-        this.silenceHandler = new SilenceHandler();
+        this.silenceHandler = silenceDetectionConfig.enabled ? new SilenceHandler(silenceDetectionConfig) : null;
         this.logMessage = null;     // Utility log message
         this.accumulatedTokens = '';// Utility to show tokens as a Message in logging
 
-        logOut(`Conversation Relay`, `Service constructed`);
+        logOut(`Conversation Relay`, `Service constructed with silence detection: ${silenceDetectionConfig.enabled}`);
     }
 
     /**
@@ -219,8 +220,9 @@ class ConversationRelayService implements ConversationRelay {
     ): Promise<ConversationRelayService> {
         logOut('Conversation Relay', 'Creating OpenAI Response Service');
         try {
+            const usedAssets = contextCacheService.getUsedAssets();
             const responseService = await OpenAIResponseService.create(contextCacheService);
-            const instance = new ConversationRelayService(responseService, sessionData);
+            const instance = new ConversationRelayService(responseService, sessionData, usedAssets.silenceDetection);
 
             // Create and set up the response handler
             const responseHandler = instance.createResponseHandler();
@@ -263,7 +265,7 @@ class ConversationRelayService implements ConversationRelay {
                 }
                 // Convert SilenceHandlerMessage to OutgoingMessage and use handler
                 const outgoingMessage: OutgoingMessage = silenceMessage as OutgoingMessage;
-                this.conversationRelayHandler.silence(outgoingMessage);
+                this.conversationRelayHandler.outgoingMessage(outgoingMessage);
             });
         }
 
