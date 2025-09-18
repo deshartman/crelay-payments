@@ -3,7 +3,7 @@ import fs from 'fs/promises';
 import path from 'path';
 
 /**
- * Interface for the function arguments
+ * Interface for the function arguments - matches MenuStepData format
  */
 interface WriteLegsArguments {
     menuPath: string;
@@ -111,8 +111,8 @@ export default async function (functionArguments: WriteLegsArguments): Promise<W
             logOut('WriteLegsTool', `Added new step at path ${functionArguments.menuPath}`);
         }
 
-        // Sort by menu path for consistency (root, 1, 1-1, 1-1-1, 1-2, 1-2-1, etc.)
-        existingData.sort((a, b) => a.menuPath.localeCompare(b.menuPath, undefined, { numeric: true }));
+        // Sort by timestamp to maintain chronological IVR navigation flow
+        existingData.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
         console.log('🗂️ WriteLegsTool: Total steps after update:', existingData.length);
 
         // Write updated data back to file
