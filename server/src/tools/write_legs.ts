@@ -3,24 +3,15 @@ import fs from 'fs/promises';
 import path from 'path';
 
 /**
- * Interface for menu sequence objects
- */
-interface MenuInfo {
-    menuId: string;
-    audioTranscript: string;
-    availableOptions: string[];
-}
-
-/**
  * Interface for the function arguments
  */
 interface WriteLegsArguments {
-    legNumber: number;
-    path: string;
-    menuSequence: MenuInfo[];
-    finalOutcome: string;
+    menuPath: string;
+    audioTranscript: string;
+    availableOptions: string[];
+    dtmfSent?: string;
+    outcome: string;
     status: 'COMPLETED' | 'IN_PROGRESS' | 'FAILED';
-    nextTarget?: string;
     [key: string]: any;
 }
 
@@ -30,26 +21,26 @@ interface WriteLegsArguments {
 interface WriteLegsResponse {
     success: boolean;
     message: string;
-    legNumber: number;
+    menuPath: string;
     filePath?: string;
 }
 
 /**
- * Interface for leg data structure
+ * Interface for menu step data structure
  */
-interface LegData {
-    legNumber: number;
-    path: string;
-    explorationDate: string;
-    menuSequence: MenuInfo[];
-    finalOutcome: string;
+interface MenuStepData {
+    menuPath: string;
+    timestamp: string;
+    audioTranscript: string;
+    availableOptions: string[];
+    dtmfSent?: string;
+    outcome: string;
     status: 'COMPLETED' | 'IN_PROGRESS' | 'FAILED';
-    nextTarget?: string;
 }
 
 /**
- * Documents completed IVR exploration legs with path details, menu transcripts,
- * and next targets for persistent cross-call state management
+ * Documents individual IVR menu steps with path details, transcripts, and DTMF actions
+ * for step-by-step navigation tracking
  *
  * @param functionArguments - The arguments for the write legs function
  * @returns Response indicating success/failure of documentation
@@ -60,17 +51,17 @@ export default async function (functionArguments: WriteLegsArguments): Promise<W
 
     try {
         // Validate required parameters
-        if (!functionArguments.legNumber) {
-            throw new Error('legNumber parameter is required');
+        if (!functionArguments.menuPath) {
+            throw new Error('menuPath parameter is required');
         }
-        if (!functionArguments.path) {
-            throw new Error('path parameter is required');
+        if (!functionArguments.audioTranscript) {
+            throw new Error('audioTranscript parameter is required');
         }
-        if (!functionArguments.menuSequence || !Array.isArray(functionArguments.menuSequence)) {
-            throw new Error('menuSequence parameter is required and must be an array');
+        if (!functionArguments.availableOptions || !Array.isArray(functionArguments.availableOptions)) {
+            throw new Error('availableOptions parameter is required and must be an array');
         }
-        if (!functionArguments.finalOutcome) {
-            throw new Error('finalOutcome parameter is required');
+        if (!functionArguments.outcome) {
+            throw new Error('outcome parameter is required');
         }
         if (!functionArguments.status) {
             throw new Error('status parameter is required');
@@ -82,47 +73,47 @@ export default async function (functionArguments: WriteLegsArguments): Promise<W
         await fs.mkdir(dataDir, { recursive: true });
         console.log('✅ WriteLegsTool: Directory created/verified');
 
-        // Prepare leg data
-        const legData: LegData = {
-            legNumber: functionArguments.legNumber,
-            path: functionArguments.path,
-            explorationDate: new Date().toISOString(),
-            menuSequence: functionArguments.menuSequence,
-            finalOutcome: functionArguments.finalOutcome,
-            status: functionArguments.status,
-            nextTarget: functionArguments.nextTarget
+        // Prepare menu step data
+        const stepData: MenuStepData = {
+            menuPath: functionArguments.menuPath,
+            timestamp: new Date().toISOString(),
+            audioTranscript: functionArguments.audioTranscript,
+            availableOptions: functionArguments.availableOptions,
+            dtmfSent: functionArguments.dtmfSent,
+            outcome: functionArguments.outcome,
+            status: functionArguments.status
         };
 
         // Read existing data or create new array
-        const dataFilePath = path.join(dataDir, 'exploration_legs.json');
+        const dataFilePath = path.join(dataDir, 'menu_steps.json');
         console.log('📖 WriteLegsTool: Reading existing data from:', dataFilePath);
-        let existingData: LegData[] = [];
+        let existingData: MenuStepData[] = [];
 
         try {
             const existingContent = await fs.readFile(dataFilePath, 'utf-8');
             existingData = JSON.parse(existingContent);
-            console.log('📚 WriteLegsTool: Loaded existing data with', existingData.length, 'legs');
+            console.log('📚 WriteLegsTool: Loaded existing data with', existingData.length, 'steps');
         } catch (error) {
             // File doesn't exist or is invalid, start with empty array
-            console.log('🆕 WriteLegsTool: Creating new exploration legs file');
-            logOut('WriteLegsTool', 'Creating new exploration legs file');
+            console.log('🆕 WriteLegsTool: Creating new menu steps file');
+            logOut('WriteLegsTool', 'Creating new menu steps file');
         }
 
-        // Check if leg already exists and update, otherwise add new
-        const existingLegIndex = existingData.findIndex(leg => leg.legNumber === functionArguments.legNumber);
-        if (existingLegIndex >= 0) {
-            console.log('🔄 WriteLegsTool: Updating existing leg #' + functionArguments.legNumber);
-            existingData[existingLegIndex] = legData;
-            logOut('WriteLegsTool', `Updated existing leg #${functionArguments.legNumber}`);
+        // Check if step already exists and update, otherwise add new
+        const existingStepIndex = existingData.findIndex(step => step.menuPath === functionArguments.menuPath);
+        if (existingStepIndex >= 0) {
+            console.log('🔄 WriteLegsTool: Updating existing step at path:', functionArguments.menuPath);
+            existingData[existingStepIndex] = stepData;
+            logOut('WriteLegsTool', `Updated existing step at path ${functionArguments.menuPath}`);
         } else {
-            console.log('➕ WriteLegsTool: Adding new leg #' + functionArguments.legNumber);
-            existingData.push(legData);
-            logOut('WriteLegsTool', `Added new leg #${functionArguments.legNumber}`);
+            console.log('➕ WriteLegsTool: Adding new step at path:', functionArguments.menuPath);
+            existingData.push(stepData);
+            logOut('WriteLegsTool', `Added new step at path ${functionArguments.menuPath}`);
         }
 
-        // Sort by leg number for consistency
-        existingData.sort((a, b) => a.legNumber - b.legNumber);
-        console.log('🗂️ WriteLegsTool: Total legs after update:', existingData.length);
+        // Sort by menu path for consistency (root, 1, 1-1, 1-1-1, 1-2, 1-2-1, etc.)
+        existingData.sort((a, b) => a.menuPath.localeCompare(b.menuPath, undefined, { numeric: true }));
+        console.log('🗂️ WriteLegsTool: Total steps after update:', existingData.length);
 
         // Write updated data back to file
         console.log('💾 WriteLegsTool: Writing data to file:', dataFilePath);
@@ -131,8 +122,8 @@ export default async function (functionArguments: WriteLegsArguments): Promise<W
 
         const response: WriteLegsResponse = {
             success: true,
-            message: `Successfully documented exploration leg #${functionArguments.legNumber} with path ${functionArguments.path}`,
-            legNumber: functionArguments.legNumber,
+            message: `Successfully documented menu step at path ${functionArguments.menuPath}`,
+            menuPath: functionArguments.menuPath,
             filePath: dataFilePath
         };
 
@@ -143,8 +134,8 @@ export default async function (functionArguments: WriteLegsArguments): Promise<W
     } catch (error) {
         const errorResponse: WriteLegsResponse = {
             success: false,
-            message: `Failed to document exploration leg: ${error instanceof Error ? error.message : String(error)}`,
-            legNumber: functionArguments.legNumber || 0
+            message: `Failed to document menu step: ${error instanceof Error ? error.message : String(error)}`,
+            menuPath: functionArguments.menuPath || 'unknown'
         };
         console.error('❌ WriteLegsTool: Error occurred:', error);
         console.error('💥 WriteLegsTool: Error response:', JSON.stringify(errorResponse, null, 2));
