@@ -2,26 +2,41 @@
     "ConversationRelay": {
         "Configuration": {
             "welcomeGreeting": "Hello there! How can I assist you today?",
-            "welcomeGreetingInterruptible": "",
+            "welcomeGreetingInterruptible": "any",
             "language": "en-AU",
             "hints": "",
             "interruptible": "any",
+            "interruptSensitivity": "medium",
             "dtmfDetection": true,
-            "reportInputDuringAgentSpeech": "",
-            "preemptible": "",
+            "partialPrompts": false,
+            "profanityFilter": false,
+            "reportInputDuringAgentSpeech": false,
+            "preemptible": false,
             "debug": "",
             "elevenlabsTextNormalization": "",
-            "intelligenceService": ""
+            "intelligenceService": "",
+            "transcriptionLanguage": "en-AU",
+            "transcriptionProvider": "Deepgram",
+            "ttsLanguage": "en-AU",
+            "ttsProvider": "ElevenLabs",
+            "voice": "IKne3meq5aSn9XLyUdCD",
+            "speechModel": "nova-3-general",
+            "languages": [
+                {
+                    "code": "en-AU",
+                    "ttsProvider": "ElevenLabs",
+                    "voice": "IKne3meq5aSn9XLyUdCD",
+                    "transcriptionProvider": "Deepgram",
+                    "speechModel": "nova-3-general"
+                }
+            ],
+            "parameters": [
+                {
+                    "name": "callReference",
+                    "value": ""
+                }
+            ]
         },
-        "Languages": [
-            {
-                "code": "en-AU",
-                "ttsProvider": "ElevenLabs",
-                "voice": "IKne3meq5aSn9XLyUdCD",
-                "transcriptionProvider": "Deepgram",
-                "speechModel": "nova-3-general"
-            }
-        ],
         "SilenceDetection": {
             "enabled": true,
             "secondsThreshold": 20,

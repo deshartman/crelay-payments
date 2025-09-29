@@ -1,26 +1,20 @@
 import type { CachedAssetsService } from '../services/CachedAssetsService.js';
+import type { VoiceResponse } from 'twilio/lib/twiml/VoiceResponse.js';
 
 /**
- * Interface for ConversationRelay TwiML configuration
+ * Use Twilio's official TypeScript interfaces for ConversationRelay TwiML configuration.
+ * These are maintained by Twilio and always up-to-date with the latest TwiML specification.
  */
-export interface ConversationRelayConfig {
-    welcomeGreeting?: string;
-    welcomeGreetingInterruptible?: string;
-    language?: string;
-    ttsLanguage?: string;
-    ttsProvider?: string;
-    voice?: string;
-    transcriptionLanguage?: string;
-    transcriptionProvider?: string;
-    speechModel?: string;
-    interruptible?: string;
-    dtmfDetection?: boolean;
-    reportInputDuringAgentSpeech?: string;
-    preemptible?: boolean;
-    hints?: string;
-    debug?: string;
-    elevenlabsTextNormalization?: string;
-    intelligenceService?: string;
+export type ConversationRelay = VoiceResponse.ConversationRelayAttributes;
+export type ConversationRelayLanguage = VoiceResponse.LanguageAttributes;
+export type ConversationRelayParameter = VoiceResponse.ParameterAttributes;
+
+/**
+ * Our serverConfig.json structure that extends Twilio's interface with nested arrays
+ */
+export interface ConversationRelayConfig extends ConversationRelay {
+    languages?: ConversationRelayLanguage[];
+    parameters?: ConversationRelayParameter[];
 }
 
 /**

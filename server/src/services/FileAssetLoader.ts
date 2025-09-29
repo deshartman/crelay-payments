@@ -111,8 +111,8 @@ export class FileAssetLoader implements AssetLoader {
             const configContent = await fs.readFile(configPath, 'utf-8');
             const config = JSON.parse(configContent);
 
-            // Return ConversationRelay configuration directly
-            const conversationRelayConfig = config.ConversationRelay || {};
+            // Return ConversationRelay Configuration section for TwiML
+            const conversationRelayConfig = config.ConversationRelay?.Configuration || {};
 
             logOut('FileAssetLoader', `Loaded ConversationRelay configuration from ${configPath}`);
             return conversationRelayConfig;
@@ -133,9 +133,9 @@ export class FileAssetLoader implements AssetLoader {
 
             const languages = new Map<string, any>();
 
-            // Load Languages configuration section
-            if (config.Languages && Array.isArray(config.Languages)) {
-                config.Languages.forEach((langConfig: any) => {
+            // Load languages from nested ConversationRelay.Configuration.languages
+            if (config.ConversationRelay?.Configuration?.languages && Array.isArray(config.ConversationRelay.Configuration.languages)) {
+                config.ConversationRelay.Configuration.languages.forEach((langConfig: any) => {
                     if (langConfig.code) {
                         languages.set(langConfig.code, langConfig);
                     }

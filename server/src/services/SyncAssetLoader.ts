@@ -25,7 +25,7 @@ export class SyncAssetLoader implements AssetLoader {
     private readonly SERVICE_DEFINITIONS: SyncServiceMap[] = [
         {
             name: 'ConversationRelay',
-            maps: ['Configuration', 'Languages', 'Context', 'ToolManifest'],
+            maps: ['Configuration', 'Context', 'ToolManifest'],
             documents: ['UsedConfig']
         }
     ];
@@ -50,8 +50,7 @@ export class SyncAssetLoader implements AssetLoader {
             // Provide defaults if no config found - this should match serverConfig.json structure
             return serverConfigData || {
                 ConversationRelay: {
-                    Configuration: {},
-                    Languages: [],
+                    Configuration: { languages: [], parameters: [] },
                     SilenceDetection: { enabled: true, secondsThreshold: 20, messages: [] }
                 },
                 AssetLoader: {
@@ -131,20 +130,22 @@ export class SyncAssetLoader implements AssetLoader {
     }
 
     /**
-     * Loads language configuration from Sync map
+     * Loads language configuration from nested Configuration.languages
      */
     async loadLanguages(): Promise<Map<string, any>> {
         try {
-            const languageData = await this.getMapItem('ConversationRelay', 'Languages');
+            const configData = await this.getMapItem('ConversationRelay', 'Configuration', 'defaultConfig');
             const languages = new Map<string, any>();
 
-            if (languageData) {
-                Object.entries(languageData).forEach(([key, value]) => {
-                    languages.set(key, value);
+            if (configData?.Configuration?.languages && Array.isArray(configData.Configuration.languages)) {
+                configData.Configuration.languages.forEach((langConfig: any) => {
+                    if (langConfig.code) {
+                        languages.set(langConfig.code, langConfig);
+                    }
                 });
             }
 
-            logOut('SyncAssetLoader', `Loaded ${languages.size} language configurations from Sync`);
+            logOut('SyncAssetLoader', `Loaded ${languages.size} language configurations from nested Configuration`);
             return languages;
         } catch (error) {
             logError('SyncAssetLoader', `Failed to load language configurations: ${error instanceof Error ? error.message : String(error)}`);
@@ -478,15 +479,8 @@ export class SyncAssetLoader implements AssetLoader {
                     logOut('SyncAssetLoader', 'Loaded ConversationRelay section into Configuration map');
                 }
 
-                // Load Languages section into Languages map
-                if (configObj.Languages && Array.isArray(configObj.Languages)) {
-                    for (const language of configObj.Languages) {
-                        if (language.code) {
-                            await this.setMapItem('ConversationRelay', 'Languages', language.code, language);
-                            logOut('SyncAssetLoader', `Loaded language ${language.code} into Languages map`);
-                        }
-                    }
-                }
+                // Languages are now nested within ConversationRelay.Configuration.languages
+                // No separate Languages map needed
 
                 // Load UsedConfig section into UsedConfig document (always update from serverConfig.json)
                 if (configObj.UsedConfig) {

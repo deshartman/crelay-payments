@@ -4,6 +4,7 @@
  */
 
 import type { SilenceDetectionConfig } from '../services/SilenceHandler.js';
+import type { ConversationRelayConfig } from './ConversationRelay.js';
 
 /**
  * Configuration type for asset loader selection
@@ -15,8 +16,7 @@ export type AssetLoaderConfig = 'sync' | 'file' | 'j2';
  */
 export interface ServerConfig {
     ConversationRelay: {
-        Configuration: any;
-        Languages: any[];
+        Configuration: ConversationRelayConfig;
         SilenceDetection: SilenceDetectionConfig;
     };
     AssetLoader: {
@@ -66,7 +66,7 @@ export interface AssetLoader {
     loadConversationRelayConfig(): Promise<any>;
 
     /**
-     * Loads language configuration settings
+     * Loads language configuration settings from nested Configuration.languages
      * @returns Promise resolving to a Map of language codes to language configuration objects
      */
     loadLanguages(): Promise<Map<string, any>>;
