@@ -10,7 +10,7 @@ import { promises as fs } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { logOut, logError } from '../utils/logger.js';
-import type { AssetLoader, UsedConfig } from '../interfaces/AssetLoader.js';
+import type { AssetLoader, ServerConfig } from '../interfaces/AssetLoader.js';
 
 interface SyncServiceMap {
     name: string;
@@ -41,20 +41,30 @@ export class SyncAssetLoader implements AssetLoader {
     }
 
     /**
-     * Loads the used configuration from Sync document
+     * Loads the server configuration from Sync document
      */
-    async loadUsedConfig(): Promise<UsedConfig> {
+    async loadServerConfig(): Promise<ServerConfig> {
         try {
-            const usedConfigData = await this.getDocument('ConversationRelay', 'UsedConfig');
+            const serverConfigData = await this.getDocument('ConversationRelay', 'ServerConfig');
 
-            // Provide defaults if no config found
-            return usedConfigData || {
-                context: 'defaultContext',
-                manifest: 'defaultToolManifest',
-                configuration: 'defaultConfiguration'
+            // Provide defaults if no config found - this should match serverConfig.json structure
+            return serverConfigData || {
+                ConversationRelay: {
+                    Configuration: {},
+                    Languages: [],
+                    SilenceDetection: { enabled: true, secondsThreshold: 20, messages: [] }
+                },
+                AssetLoader: {
+                    context: 'defaultContext',
+                    manifest: 'defaultToolManifest',
+                    assetLoaderType: 'sync'
+                },
+                Server: {
+                    ListenMode: { enabled: false }
+                }
             };
         } catch (error) {
-            logError('SyncAssetLoader', `Failed to load UsedConfig: ${error instanceof Error ? error.message : String(error)}`);
+            logError('SyncAssetLoader', `Failed to load ServerConfig: ${error instanceof Error ? error.message : String(error)}`);
             throw error;
         }
     }
@@ -108,19 +118,12 @@ export class SyncAssetLoader implements AssetLoader {
     /**
      * Loads ConversationRelay configuration from Sync map
      */
-    async loadConversationRelayConfig(): Promise<Map<string, any>> {
+    async loadConversationRelayConfig(): Promise<any> {
         try {
             const configData = await this.getMapItem('ConversationRelay', 'Configuration');
-            const conversationRelayConfig = new Map<string, any>();
 
-            if (configData) {
-                Object.entries(configData).forEach(([key, value]) => {
-                    conversationRelayConfig.set(key, value);
-                });
-            }
-
-            logOut('SyncAssetLoader', `Loaded ${conversationRelayConfig.size} ConversationRelay configuration items from Sync`);
-            return conversationRelayConfig;
+            logOut('SyncAssetLoader', `Loaded ConversationRelay configuration from Sync`);
+            return configData || {};
         } catch (error) {
             logError('SyncAssetLoader', `Failed to load ConversationRelay configuration: ${error instanceof Error ? error.message : String(error)}`);
             throw error;
@@ -453,7 +456,7 @@ export class SyncAssetLoader implements AssetLoader {
     }
 
     /**
-     * Loads assets into ConversationRelay service from defaultConfig.json
+     * Loads assets into ConversationRelay service from serverConfig.json
      * @param loadDefaults - If true, loads default context and manifest. If false, only loads config assets.
      */
     private async loadDefaultAssets(loadDefaults: boolean = true): Promise<void> {
@@ -465,7 +468,7 @@ export class SyncAssetLoader implements AssetLoader {
             }
 
             // Always load/reload configuration assets
-            const defaultConfig = await this.loadAssetFile('defaultConfig.json');
+            const defaultConfig = await this.loadAssetFile('serverConfig.json');
             if (defaultConfig) {
                 const configObj = defaultConfig as any;
 
@@ -485,7 +488,7 @@ export class SyncAssetLoader implements AssetLoader {
                     }
                 }
 
-                // Load UsedConfig section into UsedConfig document (always update from defaultConfig.json)
+                // Load UsedConfig section into UsedConfig document (always update from serverConfig.json)
                 if (configObj.UsedConfig) {
                     await this.setDocument('ConversationRelay', 'UsedConfig', configObj.UsedConfig);
                     logOut('SyncAssetLoader', 'Loaded UsedConfig section into UsedConfig document');

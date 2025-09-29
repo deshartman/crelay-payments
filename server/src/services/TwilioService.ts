@@ -133,8 +133,7 @@ class TwilioService extends EventEmitter {
             logOut('TwilioService', `Generating TwiML for call with callReference: ${callReference}`);
 
             // Get configuration from CachedAssetsService
-            const usedConfig = cachedAssetsService.getUsedConfig();
-            const config = cachedAssetsService.getConversationRelayConfig(usedConfig.configuration);
+            const config = cachedAssetsService.getConversationRelayConfig();
             const languages = cachedAssetsService.getLanguages();
 
             if (!config) {

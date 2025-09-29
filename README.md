@@ -2,15 +2,15 @@
 
 This is a reference implementation aimed at introducing the key concepts of Conversation Relay. The key here is to ensure it is a workable environment that can be used to understand the basic concepts of Conversation Relay. It is intentionally simple and only the minimum has been done to ensure the understanding is focussed on the core concepts.
 
-## Release v4.6.0 - Major Architecture Update
+## Release v4.7.0 - Configuration System Redesign
 
-This release introduces a **complete redesign of the asset loading architecture**, enabling flexible configuration management through multiple data sources.
+This release introduces **major breaking changes** to the configuration system, providing a cleaner, more organized structure for managing server settings.
 
-**🔧 New Asset Management System:**
-- **File-Based Loading**: Perfect for development - no Twilio Sync required
-- **Sync-Based Loading**: Ideal for production - centralized configuration with automatic infrastructure setup
-- **Automatic Sync Setup**: Creates all required Sync services/maps/documents automatically from defaultConfig.json
-- **Flexible Configuration**: Choose your approach via `assetLoaderType` setting
+**🔧 Breaking Changes:**
+- **Configuration File**: `defaultConfig.json` → `serverConfig.json`
+- **Configuration Structure**: Complete reorganization into logical sections (ConversationRelay, AssetLoader, Server)
+- **Interface Changes**: `UsedConfig` → `ServerConfig` with updated method signatures
+- **Asset Loading**: Enhanced multi-source asset management system
 
 **✅ Breaking Changes:** TwilioService constructor no longer requires dependencies - enables standalone tool usage (e.g., send-sms)
 
@@ -357,11 +357,13 @@ The system now supports **flexible asset loading** with two distinct approaches 
 
 ### 🔧 Asset Loading Options
 
-**Configure in `server/assets/defaultConfig.json`:**
+**Configure in `server/assets/serverConfig.json`:**
 ```json
 {
-  "UsedConfig": {
-    "assetLoaderType": "file"  // or "sync"
+  "AssetLoader": {
+    "assetLoaderType": "file",  // or "sync"
+    "context": "defaultContext",
+    "manifest": "defaultToolManifest"
   }
 }
 ```
@@ -371,12 +373,12 @@ The system now supports **flexible asset loading** with two distinct approaches 
 **Perfect for**: Development, testing, simple deployments, getting started
 
 **Setup Steps:**
-1. Set `"assetLoaderType": "file"` in `defaultConfig.json`
+1. Set `"assetLoaderType": "file"` in `serverConfig.json`
 2. Place your asset files in `server/assets/`
 3. Start the server - no external dependencies required!
 
 **Required Files:**
-- `server/assets/defaultConfig.json` - Main configuration
+- `server/assets/serverConfig.json` - Main configuration
 - `server/assets/defaultContext.md` - Conversation context
 - `server/assets/defaultToolManifest.json` - Tool definitions
 
@@ -392,15 +394,15 @@ The system now supports **flexible asset loading** with two distinct approaches 
 **Perfect for**: Production deployments, centralized configuration, multiple servers
 
 **Setup Steps:**
-1. Set `"assetLoaderType": "sync"` in `defaultConfig.json`
+1. Set `"assetLoaderType": "sync"` in `serverConfig.json`
 2. Configure Twilio credentials in `.env`
 3. Start the server - Sync infrastructure is created automatically!
 
 **Automatic Setup Process:**
 1. **Service Creation**: Creates ConversationRelay Sync service automatically
 2. **Map Creation**: Creates Contexts, Manifests, Configuration, Languages maps
-3. **Document Creation**: Creates UsedConfig document
-4. **Asset Population**: Loads initial data from `defaultConfig.json`
+3. **Document Creation**: Creates ServerConfig document
+4. **Asset Population**: Loads initial data from `serverConfig.json`
 
 **Benefits:**
 - ✅ Centralized configuration management
@@ -493,13 +495,13 @@ curl -X POST 'https://your-server/updateResponseService' \
 
 3. **Set as Active Configuration**: Configure the system to use your custom configurations
    ```bash
-   curl -X POST 'https://your-server/api/sync/usedconfig' \
-     --data-raw '{"context": "myBusinessContext", "manifest": "myBusinessTools"}'
+   curl -X POST 'https://your-server/api/sync/serverconfig' \
+     --data-raw '{"AssetLoader": {"context": "myBusinessContext", "manifest": "myBusinessTools"}}'
    ```
 
 4. **Verify Configuration**: Confirm your configurations are loaded
    ```bash
-   curl 'https://your-server/api/sync/usedconfig'
+   curl 'https://your-server/api/sync/serverconfig'
    ```
 
 #### Configuration Management Architecture
@@ -599,15 +601,12 @@ Version 4.4.3 introduces a comprehensive silence detection configuration system 
 
 ### Configuration Structure
 
-Silence detection is configured through the `UsedConfig.silenceDetection` object in `defaultConfig.json`:
+Silence detection is configured through the `ConversationRelay.SilenceDetection` object in `serverConfig.json`:
 
 ```json
 {
-  "UsedConfig": {
-    "configuration": "defaultConfig",
-    "context": "defaultContext",
-    "manifest": "defaultToolManifest",
-    "silenceDetection": {
+  "ConversationRelay": {
+    "SilenceDetection": {
       "enabled": false,
       "secondsThreshold": 20,
       "messages": [
@@ -616,6 +615,11 @@ Silence detection is configured through the `UsedConfig.silenceDetection` object
         "Hello? Are you still on the line?"
       ]
     }
+  },
+  "AssetLoader": {
+    "context": "defaultContext",
+    "manifest": "defaultToolManifest",
+    "assetLoaderType": "file"
   }
 }
 ```
@@ -690,15 +694,21 @@ Version 4.5.0 introduces Listen Mode, a powerful feature that enables automated 
 
 ### Configuration Structure
 
-Listen mode is configured through the `UsedConfig.listenMode` object in `defaultConfig.json`:
+Listen mode is configured through the `Server.ListenMode` object in `serverConfig.json`:
 
 ```json
 {
-  "UsedConfig": {
-    "configuration": "defaultConfig",
+  "ConversationRelay": {
+    "Configuration": {},
+    "Languages": []
+  },
+  "AssetLoader": {
     "context": "defaultContext",
     "manifest": "defaultToolManifest",
-    "listenMode": {
+    "assetLoaderType": "file"
+  },
+  "Server": {
+    "ListenMode": {
       "enabled": true
     }
   }

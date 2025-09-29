@@ -29,7 +29,7 @@ import { promises as fs } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { logOut, logError } from '../utils/logger.js';
-import type { AssetLoader, UsedConfig, AssetLoaderConfig } from '../interfaces/AssetLoader.js';
+import type { AssetLoader, ServerConfig, AssetLoaderConfig } from '../interfaces/AssetLoader.js';
 import type { SilenceDetectionConfig } from './SilenceHandler.js';
 import { SyncAssetLoader } from './SyncAssetLoader.js';
 import { FileAssetLoader } from './FileAssetLoader.js';
@@ -37,8 +37,8 @@ import { FileAssetLoader } from './FileAssetLoader.js';
 interface CachedAssets {
     contexts: Map<string, string>;
     manifests: Map<string, object>;
-    usedConfig: UsedConfig;
-    conversationRelayConfig: Map<string, any>;
+    serverConfig: ServerConfig;
+    conversationRelayConfig: any;
     languages: Map<string, any>;
 }
 
@@ -67,9 +67,9 @@ class CachedAssetsService {
                 logOut('CachedAssetsService', 'Asset loader initialized');
             }
 
-            // Load used config, contexts, manifests, and configuration from asset loader
-            const [usedConfig, contexts, manifests, conversationRelayConfig, languages] = await Promise.all([
-                this.assetLoader.loadUsedConfig(),
+            // Load server config, contexts, manifests, and configuration from asset loader
+            const [serverConfig, contexts, manifests, conversationRelayConfig, languages] = await Promise.all([
+                this.assetLoader.loadServerConfig(),
                 this.assetLoader.loadContexts(),
                 this.assetLoader.loadManifests(),
                 this.assetLoader.loadConversationRelayConfig(),
@@ -79,13 +79,13 @@ class CachedAssetsService {
             this.cache = {
                 contexts,
                 manifests,
-                usedConfig,
+                serverConfig,
                 conversationRelayConfig,
                 languages
             };
 
             this.isInitialized = true;
-            logOut('CachedAssetsService', `Cache initialized: ${contexts.size} contexts, ${manifests.size} manifests, ${conversationRelayConfig.size} config items, ${languages.size} languages`);
+            logOut('CachedAssetsService', `Cache initialized: ${contexts.size} contexts, ${manifests.size} manifests, 1 config loaded, ${languages.size} languages`);
 
         } catch (error) {
             logError('CachedAssetsService', `Failed to initialize cache: ${error instanceof Error ? error.message : String(error)}`);
@@ -100,11 +100,11 @@ class CachedAssetsService {
     getUsedAssets(): { context: string; manifest: object; silenceDetection: SilenceDetectionConfig; listenMode: { enabled: boolean } } {
         this.ensureInitialized();
 
-        const defaultContextKey = this.cache!.usedConfig.context;
-        const defaultManifestKey = this.cache!.usedConfig.manifest;
+        const defaultContextKey = this.cache!.serverConfig.AssetLoader.context;
+        const defaultManifestKey = this.cache!.serverConfig.AssetLoader.manifest;
 
-        const context = this.cache!.contexts.get(defaultContextKey) || '';
-        const manifest = this.cache!.manifests.get(defaultManifestKey) || {};
+        const context = this.cache!.contexts.get(defaultContextKey);
+        const manifest = this.cache!.manifests.get(defaultManifestKey);
 
         // Default silence detection config if not provided
         const defaultSilenceConfig: SilenceDetectionConfig = {
@@ -120,10 +120,10 @@ class CachedAssetsService {
 
         // Return deep copies to ensure session independence
         return {
-            context: context,
-            manifest: JSON.parse(JSON.stringify(manifest)),
-            silenceDetection: this.cache!.usedConfig.silenceDetection ?? defaultSilenceConfig,
-            listenMode: this.cache!.usedConfig.listenMode ?? defaultListenMode
+            context: context || '',
+            manifest: JSON.parse(JSON.stringify(manifest || {})),
+            silenceDetection: this.cache!.serverConfig.ConversationRelay.SilenceDetection ?? defaultSilenceConfig,
+            listenMode: this.cache!.serverConfig.Server.ListenMode ?? defaultListenMode
         };
     }
 
@@ -163,7 +163,7 @@ class CachedAssetsService {
         }
 
         // Use currently used manifest for context switches
-        const usedManifest = this.cache!.manifests.get(this.cache!.usedConfig.manifest) || {};
+        const usedManifest = this.cache!.manifests.get(this.cache!.serverConfig.AssetLoader.manifest) || {};
 
         return {
             context,
@@ -188,23 +188,12 @@ class CachedAssetsService {
     }
 
     /**
-     * Gets ConversationRelay configuration by key
-     * @param key Optional specific configuration key
-     * @returns Configuration value(s)
+     * Gets ConversationRelay configuration
+     * @returns ConversationRelay configuration object
      */
-    getConversationRelayConfig(key?: string): any {
+    getConversationRelayConfig(): any {
         this.ensureInitialized();
-
-        if (key) {
-            return this.cache!.conversationRelayConfig.get(key) || null;
-        }
-
-        // Return all config as an object
-        const config: any = {};
-        this.cache!.conversationRelayConfig.forEach((value, configKey) => {
-            config[configKey] = value;
-        });
-        return config;
+        return this.cache!.conversationRelayConfig;
     }
 
     /**
@@ -228,17 +217,17 @@ class CachedAssetsService {
     }
 
     /**
-     * Gets the used configuration
-     * @param key Optional specific used config key
-     * @returns Used configuration value(s)
+     * Gets the server configuration
+     * @param key Optional specific server config key
+     * @returns Server configuration value(s)
      */
-    getUsedConfig(key?: string): any {
+    getServerConfig(key?: string): any {
         this.ensureInitialized();
 
         if (key) {
-            return (this.cache!.usedConfig as any)[key] || null;
+            return (this.cache!.serverConfig as any)[key] || null;
         }
-        return this.cache!.usedConfig;
+        return this.cache!.serverConfig;
     }
 
     /**
@@ -294,7 +283,7 @@ class CachedAssetsService {
     }
 
     /**
-     * Reads the asset loader configuration from defaultConfig.json
+     * Reads the asset loader configuration from serverConfig.json
      */
     private async readAssetLoaderConfig(): Promise<AssetLoaderConfig> {
         try {
@@ -302,14 +291,14 @@ class CachedAssetsService {
             const currentModuleFile = fileURLToPath(import.meta.url);
             const serverSrcDir = dirname(dirname(currentModuleFile)); // Go up from services to src
             const serverDir = dirname(serverSrcDir); // Go up from src to server
-            const configPath = join(serverDir, 'assets', 'defaultConfig.json');
+            const configPath = join(serverDir, 'assets', 'serverConfig.json');
 
             // Read and parse config
             const configContent = await fs.readFile(configPath, 'utf-8');
             const config = JSON.parse(configContent);
 
             // Extract assetLoaderType, default to 'sync' for backward compatibility
-            return config.UsedConfig?.assetLoaderType || 'sync';
+            return config.AssetLoader?.assetLoaderType || 'sync';
         } catch (error) {
             logError('CachedAssetsService', `Failed to read asset loader config: ${error instanceof Error ? error.message : String(error)}, defaulting to sync`);
             return 'sync';

@@ -1,5 +1,79 @@
 # Changelog
 
+## Release v4.7.0
+
+### Major Breaking Changes: Complete Configuration System Redesign
+
+This release fundamentally restructures the configuration system, requiring migration of existing configuration files and updates to any custom integrations.
+
+#### 🚨 Breaking Changes
+
+**File & Interface Renames:**
+- **Configuration File**: `defaultConfig.json` → `serverConfig.json`
+- **TypeScript Interface**: `UsedConfig` → `ServerConfig`
+- **Method Names**:
+  - `loadUsedConfig()` → `loadServerConfig()`
+  - `getUsedConfig()` → `getServerConfig()`
+  - `getConversationRelayConfig(key)` → `getConversationRelayConfig()` (no key required)
+
+**Complete Configuration Structure Overhaul:**
+
+*Old Structure:*
+```json
+{
+  "ConversationRelay": { /* mixed settings */ },
+  "Languages": [ /* top-level */ ],
+  "UsedConfig": {
+    "configuration": "defaultConfig",
+    "context": "defaultContext",
+    "manifest": "defaultToolManifest",
+    "assetLoaderType": "file",
+    "silenceDetection": { /* ConversationRelay setting */ },
+    "listenMode": { /* OpenAI setting */ }
+  }
+}
+```
+
+*New Structure:*
+```json
+{
+  "ConversationRelay": {
+    "Configuration": { /* TwilioService settings */ },
+    "Languages": [ /* moved from top-level */ ],
+    "SilenceDetection": { /* moved from UsedConfig */ }
+  },
+  "AssetLoader": {
+    "context": "defaultContext",
+    "manifest": "defaultToolManifest",
+    "assetLoaderType": "file"
+  },
+  "Server": {
+    "ListenMode": { /* moved from UsedConfig */ }
+  }
+}
+```
+
+#### ✨ Added
+
+- **Clear Separation of Concerns**: Configuration now organized by actual service ownership
+- **Intuitive Naming**: File names, interfaces, and methods use descriptive names
+- **Simplified API**: Removed hardcoded configuration keys and map-based storage
+- **LLM Flexibility**: AssetLoader section is now LLM-agnostic (works with OpenAI, Flowise, etc.)
+
+#### 🗑️ Removed
+
+- **Configuration Keys**: No more hardcoded 'defaultConfig' keys
+- **Misleading Fields**: Removed unused `Server.configuration` reference field
+- **Map-Based Config Storage**: ConversationRelay config stored as direct object
+- **Mixed Concerns**: Settings now logically grouped by service responsibility
+
+#### 📝 Migration Required
+
+1. **Rename your config file**: `defaultConfig.json` → `serverConfig.json`
+2. **Restructure your configuration** using the new format above
+3. **Update any custom code** referencing old interface/method names
+4. **Update documentation** referencing old configuration paths
+
 ## Release v4.6.0
 
 ### Major Architecture Redesign: Asset Loading System

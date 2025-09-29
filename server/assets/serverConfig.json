@@ -1,0 +1,44 @@
+{
+    "ConversationRelay": {
+        "Configuration": {
+            "welcomeGreeting": "Hello there! How can I assist you today?",
+            "welcomeGreetingInterruptible": "",
+            "language": "en-AU",
+            "hints": "",
+            "interruptible": "any",
+            "dtmfDetection": true,
+            "reportInputDuringAgentSpeech": "",
+            "preemptible": "",
+            "debug": "",
+            "elevenlabsTextNormalization": "",
+            "intelligenceService": ""
+        },
+        "Languages": [
+            {
+                "code": "en-AU",
+                "ttsProvider": "ElevenLabs",
+                "voice": "IKne3meq5aSn9XLyUdCD",
+                "transcriptionProvider": "Deepgram",
+                "speechModel": "nova-3-general"
+            }
+        ],
+        "SilenceDetection": {
+            "enabled": true,
+            "secondsThreshold": 20,
+            "messages": [
+                "Still there?",
+                "Just checking you are still there?"
+            ]
+        }
+    },
+    "AssetLoader": {
+        "context": "defaultContext",
+        "manifest": "defaultToolManifest",
+        "assetLoaderType": "file"
+    },
+    "Server": {
+        "ListenMode": {
+            "enabled": false
+        }
+    }
+}

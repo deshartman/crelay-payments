@@ -9,7 +9,7 @@ import { promises as fs } from 'fs';
 import { join, dirname, basename } from 'path';
 import { fileURLToPath } from 'url';
 import { logOut, logError } from '../utils/logger.js';
-import type { AssetLoader, UsedConfig } from '../interfaces/AssetLoader.js';
+import type { AssetLoader, ServerConfig } from '../interfaces/AssetLoader.js';
 
 export class FileAssetLoader implements AssetLoader {
     private assetsPath: string;
@@ -23,25 +23,18 @@ export class FileAssetLoader implements AssetLoader {
     }
 
     /**
-     * Loads the used configuration from defaultConfig.json
+     * Loads the server configuration from serverConfig.json
      */
-    async loadUsedConfig(): Promise<UsedConfig> {
+    async loadServerConfig(): Promise<ServerConfig> {
         try {
-            const configPath = join(this.assetsPath, 'defaultConfig.json');
+            const configPath = join(this.assetsPath, 'serverConfig.json');
             const configContent = await fs.readFile(configPath, 'utf-8');
             const config = JSON.parse(configContent);
 
-            // Extract UsedConfig from the file structure
-            const usedConfig = config.UsedConfig || {
-                context: 'defaultContext',
-                manifest: 'defaultToolManifest',
-                configuration: 'defaultConfiguration'
-            };
-
-            logOut('FileAssetLoader', `Loaded UsedConfig from ${configPath}`);
-            return usedConfig;
+            logOut('FileAssetLoader', `Loaded ServerConfig from ${configPath}`);
+            return config;
         } catch (error) {
-            logError('FileAssetLoader', `Failed to load UsedConfig: ${error instanceof Error ? error.message : String(error)}`);
+            logError('FileAssetLoader', `Failed to load ServerConfig: ${error instanceof Error ? error.message : String(error)}`);
             throw error;
         }
     }
@@ -84,10 +77,10 @@ export class FileAssetLoader implements AssetLoader {
             const manifests = new Map<string, object>();
             const files = await fs.readdir(this.assetsPath);
 
-            // Find all .json files that could be manifests (exclude defaultConfig.json)
+            // Find all .json files that could be manifests (exclude serverConfig.json)
             const manifestFiles = files.filter(file =>
                 file.endsWith('.json') &&
-                file !== 'defaultConfig.json' &&
+                file !== 'serverConfig.json' &&
                 (file.toLowerCase().includes('manifest') || file.toLowerCase().includes('tool'))
             );
 
@@ -110,22 +103,18 @@ export class FileAssetLoader implements AssetLoader {
     }
 
     /**
-     * Loads ConversationRelay configuration from defaultConfig.json
+     * Loads ConversationRelay configuration from serverConfig.json
      */
-    async loadConversationRelayConfig(): Promise<Map<string, any>> {
+    async loadConversationRelayConfig(): Promise<any> {
         try {
-            const configPath = join(this.assetsPath, 'defaultConfig.json');
+            const configPath = join(this.assetsPath, 'serverConfig.json');
             const configContent = await fs.readFile(configPath, 'utf-8');
             const config = JSON.parse(configContent);
 
-            const conversationRelayConfig = new Map<string, any>();
+            // Return ConversationRelay configuration directly
+            const conversationRelayConfig = config.ConversationRelay || {};
 
-            // Store ConversationRelay configuration under "defaultConfig" key to match Sync structure
-            if (config.ConversationRelay) {
-                conversationRelayConfig.set('defaultConfig', config.ConversationRelay);
-            }
-
-            logOut('FileAssetLoader', `Loaded ${conversationRelayConfig.size} ConversationRelay configuration items from ${configPath}`);
+            logOut('FileAssetLoader', `Loaded ConversationRelay configuration from ${configPath}`);
             return conversationRelayConfig;
         } catch (error) {
             logError('FileAssetLoader', `Failed to load ConversationRelay configuration: ${error instanceof Error ? error.message : String(error)}`);
@@ -134,11 +123,11 @@ export class FileAssetLoader implements AssetLoader {
     }
 
     /**
-     * Loads language configuration from defaultConfig.json
+     * Loads language configuration from serverConfig.json
      */
     async loadLanguages(): Promise<Map<string, any>> {
         try {
-            const configPath = join(this.assetsPath, 'defaultConfig.json');
+            const configPath = join(this.assetsPath, 'serverConfig.json');
             const configContent = await fs.readFile(configPath, 'utf-8');
             const config = JSON.parse(configContent);
 

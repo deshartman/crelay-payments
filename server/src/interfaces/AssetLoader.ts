@@ -11,16 +11,23 @@ import type { SilenceDetectionConfig } from '../services/SilenceHandler.js';
 export type AssetLoaderConfig = 'sync' | 'file' | 'j2';
 
 /**
- * UsedConfig structure for determining default assets
+ * ServerConfig structure for server configuration
  */
-export interface UsedConfig {
-    context: string;
-    manifest: string;
-    configuration?: string;
-    assetLoaderType?: AssetLoaderConfig;
-    silenceDetection?: SilenceDetectionConfig;
-    listenMode?: {
-        enabled: boolean;
+export interface ServerConfig {
+    ConversationRelay: {
+        Configuration: any;
+        Languages: any[];
+        SilenceDetection: SilenceDetectionConfig;
+    };
+    AssetLoader: {
+        context: string;
+        manifest: string;
+        assetLoaderType: AssetLoaderConfig;
+    };
+    Server: {
+        ListenMode: {
+            enabled: boolean;
+        };
     };
 }
 
@@ -35,10 +42,10 @@ export interface AssetLoader {
     initialize?(): Promise<void>;
 
     /**
-     * Loads the used configuration that determines default context and manifest
-     * @returns Promise resolving to the used configuration object
+     * Loads the server configuration that determines default context and manifest
+     * @returns Promise resolving to the server configuration object
      */
-    loadUsedConfig(): Promise<UsedConfig>;
+    loadServerConfig(): Promise<ServerConfig>;
 
     /**
      * Loads all available contexts
@@ -54,9 +61,9 @@ export interface AssetLoader {
 
     /**
      * Loads ConversationRelay configuration settings
-     * @returns Promise resolving to a Map of configuration keys to configuration values
+     * @returns Promise resolving to the ConversationRelay configuration object
      */
-    loadConversationRelayConfig(): Promise<Map<string, any>>;
+    loadConversationRelayConfig(): Promise<any>;
 
     /**
      * Loads language configuration settings
