@@ -14,8 +14,20 @@ interface StatusCallback {
 }
 
 /**
- * Service class for handling Twilio-related operations including making calls, sending SMS and generating TwiML for the Conversation Relay service.
- * 
+ * Service class for handling Twilio-related operations including making calls and generating TwiML for the Conversation Relay service.
+ *
+ * ## Usage Guidelines
+ *
+ * **Use TwilioService when:**
+ * - Making complex API calls that use multiple Twilio services
+ * - Implementation requires non-API level business logic
+ * - NOT creating an LLM tool (tools should be self-contained)
+ *
+ * **Don't use TwilioService (use direct Twilio API) when:**
+ * - Creating LLM tools in src/tools/ directory
+ * - Tools should call Twilio API directly for self-contained execution
+ * - Example: src/tools/send-sms.ts uses direct twilio.messages.create() call
+ *
  * @class
  * @property {string} accountSid - Twilio account SID from environment variables
  * @property {string} authToken - Twilio authentication token from environment variables
@@ -110,29 +122,6 @@ class TwilioService extends EventEmitter {
         } catch (error) {
             logError('TwilioService', `Make Outbound call error: ${error instanceof Error ? error.message : String(error)}`);
             throw error;
-        }
-    }
-
-    /**
-     * Sends an SMS message using the configured Twilio number.
-     * 
-     * @param {string} to - The destination phone number in E.164 format
-     * @param {string} message - The message content to send
-     * @returns {Promise<string|null>} The Twilio message SID if successful, null if sending fails
-     */
-    async sendSMS(to: string, message: string): Promise<string | null> {
-        try {
-            logOut('TwilioService', `Sending SMS to: ${to} with message: ${message}`);
-
-            const response = await this.twilioClient.messages.create({
-                body: message,
-                from: this.fromNumber,
-                to: to
-            });
-            return response.sid;
-        } catch (error) {
-            logError('TwilioService', `Error sending SMS: ${error instanceof Error ? error.message : String(error)}`);
-            return null;
         }
     }
 

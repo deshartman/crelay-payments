@@ -1,5 +1,62 @@
 # Changelog
 
+## Release v4.9.6
+
+### TwilioService Architecture - LLM Tool Self-Containment
+
+This release establishes a clear architectural pattern for when to use TwilioService versus direct Twilio API calls, particularly for LLM tools.
+
+#### 🏗️ Architectural Decision
+
+**LLM Tool Self-Containment Pattern:**
+- LLM tools in `src/tools/` directory should be self-contained and call Twilio APIs directly
+- TwilioService is reserved for complex operations requiring non-API level business logic
+- This pattern prevents unnecessary service layer coupling and keeps tools portable
+
+#### 🔧 Technical Changes
+
+**TwilioService.sendSMS() Removed:**
+- Removed `sendSMS()` method from TwilioService (lines 123-137)
+- Method was a simple wrapper with no added business logic
+- Direct API calls are more appropriate for simple operations
+
+**send-sms Tool Refactored:**
+- Updated `src/tools/send-sms.ts` to call Twilio API directly
+- Changed from: `new TwilioService().sendSMS(to, message)`
+- Changed to: `twilio(accountSid, authToken).messages.create({...})`
+- Tool remains fully functional with improved architectural alignment
+
+**Documentation Updates:**
+- Added usage guidelines to TwilioService class documentation (src/services/TwilioService.ts:16-30)
+- Added "TwilioService Usage Guidelines" section to README Architecture chapter
+- Clear guidance on when to use TwilioService vs. direct API calls
+
+#### ✅ Usage Guidelines
+
+**Use TwilioService when:**
+- Making complex API calls that use multiple Twilio services
+- Implementation requires non-API level business logic
+- Building server endpoints or internal service operations
+- **NOT** creating an LLM tool (tools should be self-contained)
+
+**Use Direct Twilio API when:**
+- Creating LLM tools in `src/tools/` directory
+- Tool operations are simple API calls without business logic
+- Ensures tools remain portable and self-contained
+- Example: `send-sms.ts`, future payment tools, etc.
+
+#### 📝 Files Modified
+
+- `server/src/services/TwilioService.ts` - Removed sendSMS() method, updated class documentation
+- `server/src/tools/send-sms.ts` - Refactored to use direct Twilio API calls
+- `server/package.json` - Version bump to 4.9.6
+- `README.md` - Added TwilioService Usage Guidelines section
+- `CHANGELOG.md` - This entry
+
+This architectural pattern improves code maintainability, reduces unnecessary coupling, and establishes clear guidelines for future tool development.
+
+---
+
 ## Release v4.9.5
 
 ### Twilio Edge Location Support

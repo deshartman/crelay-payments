@@ -1059,6 +1059,24 @@ The server is organized into modular services:
 3. **SilenceHandler** - Manages silence detection and response with configurable thresholds
 4. **TwilioService** - Manages Twilio-specific functionality and call control operations
 
+### TwilioService Usage Guidelines
+
+The TwilioService follows a specific architectural pattern to maintain clean separation between service-level operations and self-contained LLM tools:
+
+**Use TwilioService when:**
+- Making complex API calls that use multiple Twilio services
+- Implementation requires non-API level business logic
+- Building server endpoints or internal service operations
+- **NOT** creating an LLM tool (tools should be self-contained)
+
+**Don't use TwilioService (use direct Twilio API) when:**
+- Creating LLM tools in the `src/tools/` directory
+- Tools should call the Twilio API directly for self-contained execution
+- This ensures tools remain portable and don't depend on service layer coupling
+- **Example**: `src/tools/send-sms.ts` uses direct `twilio.messages.create()` call instead of TwilioService
+
+This architectural decision ensures LLM tools remain self-contained and portable, avoiding unnecessary service layer dependencies while complex business logic resides appropriately in the service layer.
+
 ### Handler Interfaces
 
 **ResponseHandler** - Handles LLM service responses:
