@@ -1,7 +1,7 @@
 {
-  "name": "simple-conversation-relay-server",
-  "version": "4.9.7",
-  "description": "WebSocket server for Twilio Conversation Relay",
+  "name": "conversation-relay-payments",
+  "version": "4.9.7.0",
+  "description": "Using Twilio Conversation Relay to handle payments in conversations.",
   "main": "dist/server.js",
   "type": "module",
   "scripts": {
