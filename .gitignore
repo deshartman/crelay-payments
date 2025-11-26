@@ -1,0 +1,25 @@
+# Node Websocket server
+server/pnpm-lock.yaml
+server/node_modules/.modules.yaml
+server/package-lock.json
+server/node_modules
+server/.env
+server/dist
+
+mcp-server/pnpm-lock.yaml
+mcp-server/node_modules/.modules.yaml
+mcp-server/node_modules
+mcp-server/.env
+mcp-server/build
+
+.DS_Store
+server/.dockerignore
+server/Dockerfile
+server/fly.toml
+server/assets/legs
+
+# Ignore all files in server/assets/ except defaults
+server/assets/*
+!server/assets/serverConfig.json
+!server/assets/defaultToolManifest.json
+!server/assets/defaultContext.md
