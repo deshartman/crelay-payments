@@ -6,6 +6,24 @@ This is the canonical reference implementation for **Twilio Agent Assisted Payme
 
 **Focus**: While based on the Conversation Relay framework, this repository emphasizes secure payment capture, natural language payment flows, and PCI-compliant payment handling. For general Conversation Relay documentation and non-payment features, see the [simple-conversation-relay](https://github.com/deshartman/simple-conversation-relay) repository.
 
+## Release v4.9.8.0 - Environment-Specific Configuration
+
+This release merges upstream improvements from [simple-conversation-relay v4.9.8](https://github.com/deshartman/simple-conversation-relay), including environment-specific `.env` file loading with NODE_ENV-based selection for clean separation between development and production configurations.
+
+**🔧 Key Features:**
+- **Environment Files**: Separate `.env.dev` and `.env.prod` files for different environments
+- **NODE_ENV Selection**: Automatic file loading based on NODE_ENV (dev/prod/fallback)
+- **Validation**: Startup validation ensures all required environment variables are present
+- **Updated Scripts**: Development and production scripts automatically load correct env files
+
+**✅ Benefits:**
+- No manual env file swapping between environments
+- Clear separation of dev/prod configurations
+- Reduced risk of using wrong credentials
+- Fast failure with clear error messages for missing variables
+
+See the [CHANGELOG.md](./CHANGELOG.md) for detailed release history.
+
 ## Quick Start
 
 ### Prerequisites
@@ -33,11 +51,28 @@ pnpm install
 npm install
 ```
 
-3. Create a `.env` file with your configuration:
+3. Configure environment files:
+
+This project uses environment-specific configuration files:
+- `.env.dev` - Development environment (loaded when NODE_ENV=dev)
+- `.env.prod` - Production environment (loaded when NODE_ENV=prod)
+- `.env` - Fallback (loaded when NODE_ENV not set)
+
+Copy `.env.example` to create your environment files:
+```bash
+cp .env.example .env.dev
+cp .env.example .env.prod
+```
+
+Then update the values in each file. Key differences:
+- `.env.dev` - Use ngrok URL for SERVER_BASE_URL (e.g., `crelay-yourname.ngrok.dev`)
+- `.env.prod` - Use production URL for SERVER_BASE_URL (e.g., `yourapp.fly.dev`)
+
+**Example configuration:**
 ```bash
 # Server Configuration
 PORT=3001
-SERVER_BASE_URL=your_server_url
+SERVER_BASE_URL=your_server_url  # ngrok for dev, fly.dev for prod
 
 # OpenAI Configuration
 OPENAI_API_KEY=your_openai_api_key
@@ -60,7 +95,7 @@ INCLUDE_POSTAL_CODE=false
 
 ### Running the Server
 
-For development:
+For development (uses `.env.dev`):
 ```bash
 # Using pnpm
 pnpm dev
@@ -69,7 +104,7 @@ pnpm dev
 npm run dev
 ```
 
-For production:
+For production (uses `.env.prod`):
 ```bash
 # Using pnpm
 pnpm build

@@ -10,6 +10,9 @@ import dotenv from 'dotenv';
 import express from 'express';
 import expressWs, { Application as ExpressWSApplication } from 'express-ws';
 import { logOut, logError } from './utils/logger.js';
+import { fileURLToPath } from 'url';
+import { existsSync } from 'fs';
+import path from 'path';
 
 // Import the services
 import { ConversationRelayService } from './services/ConversationRelayService.js'
@@ -18,7 +21,9 @@ import { TwilioService } from './services/TwilioService.js';
 import { CachedAssetsService } from './services/CachedAssetsService.js';
 import type { IncomingMessage, OutgoingMessage, SessionData } from './interfaces/ConversationRelay.js';
 
-
+// ES module equivalent of __dirname
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Define interface for WebSocket session
 interface WSSession {
@@ -40,7 +45,72 @@ interface RequestData {
     };
 }
 
-dotenv.config();
+/**
+ * Loads environment variables from the appropriate .env file based on NODE_ENV
+ */
+function loadEnvironmentConfig(): void {
+    const nodeEnv = process.env.NODE_ENV;
+    const serverRoot = path.resolve(__dirname, '..');
+
+    let envPath: string;
+    let envName: string;
+
+    // Determine which .env file to load based on NODE_ENV
+    if (nodeEnv === 'dev') {
+        envPath = path.join(serverRoot, '.env.dev');
+        envName = '.env.dev';
+    } else if (nodeEnv === 'prod') {
+        envPath = path.join(serverRoot, '.env.prod');
+        envName = '.env.prod';
+    } else {
+        envPath = path.join(serverRoot, '.env');
+        envName = '.env';
+    }
+
+    // Check if the file exists
+    if (existsSync(envPath)) {
+        const result = dotenv.config({ path: envPath });
+
+        if (result.error) {
+            logError('Server', `Failed to load environment file ${envName}: ${result.error.message}`);
+            throw result.error;
+        }
+
+        logOut('Server', `Environment loaded from: ${envName} (NODE_ENV: ${nodeEnv || 'not set'})`);
+    } else {
+        logError('Server', `Environment file not found: ${envPath}`);
+        throw new Error(`Environment file not found: ${envName}`);
+    }
+}
+
+/**
+ * Validates that required environment variables are present
+ */
+function validateRequiredEnvVars(): void {
+    const required = [
+        'PORT',
+        'SERVER_BASE_URL',
+        'OPENAI_API_KEY',
+        'ACCOUNT_SID',
+        'AUTH_TOKEN',
+        'FROM_NUMBER'
+    ];
+
+    const missing = required.filter(varName => !process.env[varName]);
+
+    if (missing.length > 0) {
+        const errorMsg = `Missing required environment variables: ${missing.join(', ')}`;
+        logError('Server', errorMsg);
+        throw new Error(errorMsg);
+    }
+
+    logOut('Server', 'All required environment variables validated');
+}
+
+// Load environment configuration
+loadEnvironmentConfig();
+validateRequiredEnvVars();
+
 const app = express() as unknown as ExpressWSApplication;
 const PORT = process.env.PORT || 3000;
 let serverBaseUrl = process.env.SERVER_BASE_URL || "localhost"; // Store server URL
@@ -69,14 +139,15 @@ let cachedAssetsService: CachedAssetsService | null = null;
  */
 async function initializeServices(): Promise<void> {
     try {
-        // Initialize TwilioService first (no dependencies, needed by other services)
-        twilioService = new TwilioService();
-        logOut('Server', 'TwilioService initialized successfully');
-
-        // Initialize CachedAssetsService (self-contained, no dependencies)
+        // Initialize CachedAssetsService first (self-contained, no dependencies)
         cachedAssetsService = new CachedAssetsService();
         await cachedAssetsService.initialize();
         logOut('Server', 'CachedAssetsService initialized successfully');
+
+        // Initialize TwilioService (no dependencies)
+        twilioService = new TwilioService();
+        await twilioService.initialize();
+        logOut('Server', 'TwilioService initialized successfully');
     } catch (error) {
         logError('Server', `Failed to initialize services: ${error instanceof Error ? error.message : String(error)}`);
         throw error;
@@ -352,128 +423,6 @@ app.post('/twilioStatusCallback', async (req: express.Request, res: express.Resp
         if (evaluatedStatusCallback) {
             await conversationRelaySession.insertMessage('system', JSON.stringify(evaluatedStatusCallback));
         }
-    }
-
-    res.json({ success: true });
-});
-
-/**
- * Formats payment callback into natural language prompt for AI to confirm captured data
- * @param callback - Payment callback data from Twilio
- * @returns Natural language prompt instructing AI what to confirm
- */
-function formatPaymentConfirmationPrompt(callback: any): string {
-    // Check for errors first
-    if (callback.PaymentError) {
-        return `System: Payment capture encountered an error: ${callback.PaymentError}. Please inform the customer about the issue and offer to retry or escalate to a live agent.`;
-    }
-
-    const captureType = callback.Capture;
-
-    switch (captureType) {
-        case 'payment-card-number':
-            const lastFour = callback.PaymentCardNumber?.slice(-4) || 'unknown';
-            const cardType = callback.PaymentCardType || 'card';
-            const digits = lastFour.split('').join(', ');
-            return `System: Payment card successfully captured. The customer entered a ${cardType} ending in ${lastFour}. Please confirm these four digits with the customer by reading each digit individually: ${digits}. Ask if the digits are correct.`;
-
-        case 'security-code':
-            const codeLength = callback.SecurityCode?.replace(/\*/g, '').length || 3;
-            return `System: Security code successfully captured. A ${codeLength}-digit code has been entered. Please confirm with the customer that they have successfully entered their security code and ask if they need to re-enter it.`;
-
-        case 'expiration-date':
-            const expiryDate = callback.ExpirationDate;
-            const month = expiryDate?.substring(0, 2);
-            const year = expiryDate?.substring(2, 4);
-            return `System: Expiration date successfully captured as ${month}/${year}. Please confirm this expiration date with the customer.`;
-
-        default:
-            return `System: Payment information capture step completed for ${captureType}. Please acknowledge and proceed to the next step.`;
-    }
-}
-
-/**
- * Endpoint to receive Agent Assisted Payments status callbacks from Twilio.
- * Receives real-time updates about payment capture progress and results.
- *
- * @name POST /payment-status-callback
- * @function
- * @async
- * @param {express.Request} req - Express request object containing payment status data
- * @param {express.Response} res - Express response object
- *
- * Callback body includes:
- * @param {string} req.body.CallSid - The call SID associated with the payment
- * @param {string} req.body.Sid - The payment session SID (not PaymentSid!)
- * @param {string} req.body.AccountSid - The Twilio account SID
- * @param {string} [req.body.Capture] - Current capture type (e.g., "payment-card-number", "security-code", "expiration-date")
- * @param {string} [req.body.Required] - Comma-separated list of what's still required
- * @param {string} [req.body.PartialResult] - String "true" or "false" indicating if still capturing
- * @param {string} [req.body.PaymentCardNumber] - Masked card number (e.g., "************1234" or progressive "x", "xx", "xxx"...)
- * @param {string} [req.body.PaymentCardType] - Card type (e.g., "visa", "mastercard", "amex")
- * @param {string} [req.body.SecurityCode] - Masked security code (e.g., "***")
- * @param {string} [req.body.ExpirationDate] - Expiration date in MMYY format
- * @param {string} [req.body.PaymentToken] - Payment token for processing
- * @param {string} [req.body.PaymentMethod] - Payment method type (e.g., "credit-card")
- * @param {string} [req.body.PaymentConnector] - Payment connector name
- * @param {string} [req.body.TokenType] - Token type (e.g., "reusable", "one-time")
- * @param {string} [req.body.DateCreated] - ISO 8601 timestamp when payment session was created
- * @param {string} [req.body.DateUpdated] - ISO 8601 timestamp when payment session was last updated
- * @param {string} [req.body.PaymentError] - Error message if payment failed
- *
- * @returns {Object} response
- * @returns {boolean} response.success - Always returns true to acknowledge receipt
- */
-app.post('/payment-status-callback', async (req: express.Request, res: express.Response) => {
-    const paymentCallback = req.body;
-    const callSid = paymentCallback.CallSid;
-
-    const partialResult = paymentCallback.PartialResult === 'true';
-    const captureType = paymentCallback.Capture;
-
-    logOut('Server', `Payment callback: CallSid=${callSid}, Capture=${captureType}, Partial=${partialResult}`);
-
-    // Get the session objects from the wsSessionsMap
-    const wsSession = wsSessionsMap.get(callSid);
-
-    if (wsSession) {
-        const conversationRelaySession = wsSession.conversationRelaySession;
-
-        if (partialResult) {
-            // Silent context update - user still entering data
-            logOut('Server', `Partial capture - updating context silently`);
-            await conversationRelaySession.insertMessage('system', JSON.stringify({
-                type: 'payment_status_partial',
-                capture: captureType,
-                maskedProgress: paymentCallback.PaymentCardNumber, // "x", "xx", "xxx"...
-                timestamp: new Date().toISOString()
-            }));
-        } else {
-            // Complete capture - add context AND trigger response
-            logOut('Server', `Complete capture detected - triggering AI response`);
-
-            // Add structured data to context
-            await conversationRelaySession.insertMessage('system', JSON.stringify({
-                type: 'payment_status_complete',
-                capture: captureType,
-                paymentSid: paymentCallback.Sid,
-                cardNumber: paymentCallback.PaymentCardNumber,
-                cardType: paymentCallback.PaymentCardType,
-                securityCode: paymentCallback.SecurityCode,
-                expirationDate: paymentCallback.ExpirationDate,
-                paymentToken: paymentCallback.PaymentToken,
-                paymentMethod: paymentCallback.PaymentMethod,
-                error: paymentCallback.PaymentError,
-                dateCreated: paymentCallback.DateCreated,
-                dateUpdated: paymentCallback.DateUpdated
-            }));
-
-            // Trigger AI response with natural language prompt
-            const prompt = formatPaymentConfirmationPrompt(paymentCallback);
-            await conversationRelaySession.generateResponse('system', prompt);
-        }
-    } else {
-        logOut('Server', `No active session found for call ${callSid}`);
     }
 
     res.json({ success: true });

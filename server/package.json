@@ -1,13 +1,15 @@
 {
   "name": "conversation-relay-payments",
-  "version": "4.9.7.0",
+  "version": "4.9.8.0",
   "description": "Using Twilio Conversation Relay to handle payments in conversations.",
   "main": "dist/server.js",
   "type": "module",
   "scripts": {
     "build": "tsc",
-    "start": "node dist/server.js",
-    "dev": "tsx watch src/server.ts"
+    "start": "NODE_ENV=prod node dist/server.js",
+    "start:dev": "NODE_ENV=dev node dist/server.js",
+    "dev": "NODE_ENV=dev tsx watch src/server.ts",
+    "dev:prod": "NODE_ENV=prod tsx watch src/server.ts"
   },
   "keywords": [],
   "author": "Des Hartman",

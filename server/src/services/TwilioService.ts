@@ -1,4 +1,5 @@
 import twilio from 'twilio';
+import { EventEmitter } from 'events';
 import { logOut, logError } from '../utils/logger.js';
 import VoiceResponse from 'twilio/lib/twiml/VoiceResponse.js';
 import { CachedAssetsService } from './CachedAssetsService.js';
@@ -33,13 +34,14 @@ interface StatusCallback {
  * @property {string} fromNumber - Twilio phone number to use as the sender
  * @property {twilio.Twilio} twilioClient - Initialized Twilio client instance
  */
-class TwilioService {
+class TwilioService extends EventEmitter {
     private accountSid: string;
     private authToken: string;
     private fromNumber: string;
     private twilioClient: twilio.Twilio;
 
     constructor() {
+        super();
         this.accountSid = process.env.ACCOUNT_SID || '';
         this.authToken = process.env.AUTH_TOKEN || '';
         this.fromNumber = process.env.FROM_NUMBER || '';
@@ -48,8 +50,8 @@ class TwilioService {
         if (process.env.TWILIO_EDGE && process.env.TWILIO_REGION) {
             logOut('TwilioService', `Initializing with Edge: ${process.env.TWILIO_EDGE}, Region: ${process.env.TWILIO_REGION}`);
             this.twilioClient = twilio(
-                this.accountSid,
-                this.authToken,
+                process.env.ACCOUNT_SID || '',
+                process.env.AUTH_TOKEN || '',
                 {
                     edge: process.env.TWILIO_EDGE,
                     region: process.env.TWILIO_REGION
@@ -57,16 +59,19 @@ class TwilioService {
             );
         } else {
             logOut('TwilioService', 'Initializing with default Twilio routing (no edge/region specified)');
-            this.twilioClient = twilio(this.accountSid, this.authToken);
+            this.twilioClient = twilio(
+                process.env.ACCOUNT_SID || '',
+                process.env.AUTH_TOKEN || ''
+            );
         }
         // this.twilioClient = twilio(process.env.API_KEY, process.env.API_SECRET, { process.env.ACCOUNT_SID });    // Some issue here with the API key and secret
     }
 
     /**
-     * Get the Twilio client instance
+     * Initialize the service
      */
-    getTwilioClient(): twilio.Twilio {
-        return this.twilioClient;
+    async initialize(): Promise<void> {
+        logOut('TwilioService', 'TwilioService initialized');
     }
 
     /**
@@ -195,14 +200,14 @@ class TwilioService {
     /**
      * Evaluate the status callback received. This will be used in the LLM to determine the next steps.
      * If there is nothing to be done, just null the response.
-     *
+     * 
      * @param statusCallback - The status callback object from Twilio
      * @returns The evaluated status callback object or null
      */
     async evaluateStatusCallback(statusCallback: StatusCallback): Promise<StatusCallback | null> {
         try {
             logOut('TwilioService', `Evaluating status callback: ${JSON.stringify(statusCallback)}`);
-            // Set variables and then return the call back
+            // Do something and then emit the event type
             const callSid = statusCallback.CallSid;
             logOut('TwilioService', `Returning evaluated status callback for callSid: ${callSid}`);
             return statusCallback;

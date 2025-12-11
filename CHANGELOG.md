@@ -1,5 +1,53 @@
 # Changelog
 
+## Release v4.9.8.0
+
+### Upstream Merge: Environment-Specific Configuration & Updates
+
+This release merges changes from [simple-conversation-relay v4.9.8](https://github.com/deshartman/simple-conversation-relay) on the v4.0 branch, bringing environment-specific .env file loading and other improvements to the payment repository.
+
+#### 🔄 Merged from Upstream
+
+**Environment-Specific Configuration System (v4.9.8):**
+- Automatic environment detection based on `NODE_ENV` variable
+- `NODE_ENV=dev` → loads `.env.dev` (development environment)
+- `NODE_ENV=prod` → loads `.env.prod` (production environment)
+- No `NODE_ENV` → loads `.env` (fallback for backward compatibility)
+- Environment validation ensures all required variables are present at startup
+- ES module compatible implementation using `fileURLToPath` and path utilities
+- Works seamlessly in both development (tsx watch) and production (compiled) modes
+
+**Enhanced Package Scripts:**
+- `dev` - Development mode with NODE_ENV=dev (uses .env.dev)
+- `start` - Production mode with NODE_ENV=prod (uses .env.prod)
+- `start:dev` - Test compiled build with dev config
+- `dev:prod` - Test prod config with hot reload
+- All scripts work with both npm and pnpm
+
+#### 📝 Files Modified
+
+- `server/src/server.ts` - Environment loading and validation functions from upstream
+- `server/package.json` - Version updated to 4.9.8.0, environment-aware scripts from upstream
+- `server/.env.example` - Payment-specific environment variables (kept from this repo)
+- `server/src/services/TwilioService.ts` - Updated from upstream (cleaner implementation)
+- `README.md` - Merged environment documentation into payment-focused structure
+- `CHANGELOG.md` - Added v4.9.8.0 release notes
+
+#### 🎯 Benefits
+
+- **Upstream Consistency**: Maintains alignment with canonical simple-conversation-relay implementation
+- **Clear Environment Separation**: Development and production configurations explicitly separated
+- **Fail-Fast Validation**: Missing configuration caught immediately at startup
+- **Developer Experience**: Simple commands (`pnpm dev`, `pnpm start`) automatically use correct environment
+- **Production Safety**: Production environment explicitly configured, reducing configuration errors
+- **Payment Functionality**: All payment-specific features preserved and working
+
+#### 📚 Documentation
+
+For detailed information about environment-specific configuration, see the [simple-conversation-relay v4.9.8 release notes](https://github.com/deshartman/simple-conversation-relay).
+
+---
+
 ## Release v4.9.7.0
 
 ### Payment-First Documentation and Repository Setup
