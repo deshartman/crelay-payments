@@ -1091,6 +1091,34 @@ git merge upstream/v4.0
 # 4. Resolve any conflicts and commit the merge if needed
 ```
 
+**Using Claude Code for Automated Upstream Merges:**
+
+This repository includes a Claude Code skill that automates the upstream merge process with intelligent conflict resolution. The skill understands the relationship between this payment-focused repository and the upstream canonical implementation, making merge decisions that preserve payment-specific functionality while adopting upstream improvements.
+
+To use the skill with Claude Code:
+
+```bash
+# In the repository root, invoke the skill
+@upstream-merge
+```
+
+The skill will:
+- Fetch upstream changes automatically
+- Apply strategic conflict resolution (accepting upstream for core files, preserving payment-specific files)
+- Update documentation (README, CHANGELOG, package.json)
+- Test the build and verify payment functionality
+- Guide you through the entire merge process
+
+**Benefits of using the skill:**
+- **Intelligent conflict resolution** - Knows which files to accept from upstream vs preserve locally
+- **Automated documentation updates** - Updates README, CHANGELOG, and package.json with proper versioning
+- **Testing validation** - Ensures build succeeds and payment tools load correctly
+- **Consistent process** - Follows best practices for every merge
+
+The skill is located at `.claude/skills/upstream-merge.md` and contains detailed documentation about the merge strategy, conflict resolution decision trees, and troubleshooting guidance.
+
+Learn more about Claude Code skills in the [Anthropic Skills documentation](https://www.anthropic.com/engineering/equipping-agents-for-the-real-world-with-agent-skills).
+
 ### Contributing
 
 Contributions to payment functionality are welcome! Please:
